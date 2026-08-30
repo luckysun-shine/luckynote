@@ -71,6 +71,16 @@ const NAV = [
   ["ai", "微信 / AI"],
 ];
 
+const TABS = [
+  { id: "home", label: "总览", icon: "🏡" },
+  { id: "books", label: "账本", icon: "📒" },
+  { id: "add", label: "记账", icon: "✎", fab: true },
+  { id: "biz", label: "经营", icon: "🎨" },
+  { id: "more", label: "更多", icon: "✦" },
+];
+
+const MORE_PAGES = ["more", "budget", "family", "ai"];
+
 export default function App() {
   const [token, setToken] = useState(localStorage.getItem("ln_token") || "");
   const [me, setMe] = useState(null);
@@ -106,8 +116,20 @@ export default function App() {
     );
   }
 
+  function logout() {
+    localStorage.removeItem("ln_token");
+    setToken("");
+  }
+
   return (
     <div className="shell">
+      <header className="m-header">
+        <Fox size={40} />
+        <div className="m-header-text">
+          <strong className="brand-cn">暖窝账本</strong>
+          <span>{me?.user.display_name} · {me?.household?.name}</span>
+        </div>
+      </header>
       <aside className="sider">
         <div className="brand">
           <Fox size={58} />
@@ -130,14 +152,7 @@ export default function App() {
               {me.user.display_name} · {me.household?.name}
             </div>
             <p className="muted">角色 {me.user.role === "owner" ? "家长" : "成员"}</p>
-            <button
-              className="btn ghost"
-              style={{ marginTop: 10, width: "100%" }}
-              onClick={() => {
-                localStorage.removeItem("ln_token");
-                setToken("");
-              }}
-            >
+            <button className="btn ghost" style={{ marginTop: 10, width: "100%" }} onClick={logout}>
               离开暖窝
             </button>
           </div>
@@ -151,7 +166,23 @@ export default function App() {
         {page === "budget" && <Budget token={token} show={show} />}
         {page === "family" && <Family token={token} me={me} show={show} />}
         {page === "ai" && <AiPanel token={token} show={show} me={me} />}
+        {page === "more" && <More go={setPage} logout={logout} me={me} />}
       </main>
+      <nav className="tabbar" aria-label="手机导航">
+        {TABS.map((tab) => {
+          const on = tab.id === "more" ? MORE_PAGES.includes(page) : page === tab.id;
+          return (
+            <button
+              key={tab.id}
+              className={`tab ${on ? "on" : ""} ${tab.fab ? "fab" : ""}`}
+              onClick={() => setPage(tab.id)}
+            >
+              <span className="tab-icon">{tab.icon}</span>
+              <span>{tab.label}</span>
+            </button>
+          );
+        })}
+      </nav>
       {toast && <div className="toast">{toast}</div>}
     </div>
   );
@@ -178,7 +209,7 @@ function Login({ onLogin, show, toast }) {
           <Fox />
           <h2>把每一笔生活，收进暖窝</h2>
           <p className="sub">
-            家人各自记账，月底一起看家底；副业单独一本账；微信对窝窝说一声，就能落下账。
+            家人各自记账，月底一起看家底；副业单独一本账。手机浏览器打开就能用，也可添加到主屏幕。
           </p>
           <p className="muted" style={{ marginTop: 24 }}>
             演示账号 lin / yuan，密码均为 luckynote
@@ -188,11 +219,11 @@ function Login({ onLogin, show, toast }) {
           <h3>欢迎回家</h3>
           <label>
             用户名
-            <input value={username} onChange={(e) => setUsername(e.target.value)} />
+            <input autoComplete="username" value={username} onChange={(e) => setUsername(e.target.value)} />
           </label>
           <label style={{ marginTop: 12 }}>
             密码
-            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
+            <input type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} />
           </label>
           <button className="btn" style={{ marginTop: 22, width: "100%" }}>
             推开暖窝的门
@@ -201,6 +232,41 @@ function Login({ onLogin, show, toast }) {
       </div>
       {toast && <div className="toast">{toast}</div>}
     </div>
+  );
+}
+
+function More({ go, logout, me }) {
+  const items = [
+    ["budget", "预算", "给这个月画一条温柔的线"],
+    ["family", "家人", "邀请成员、绑定微信别名"],
+    ["ai", "微信 / AI", "语音记账 Token 与试写"],
+  ];
+  return (
+    <>
+      <h2 className="hello">更多</h2>
+      <p className="sub">预算、家人和微信入口都在这里。底部中间按钮随时记账。</p>
+      <div className="more-list">
+        {items.map(([id, title, desc]) => (
+          <button key={id} className="more-item" onClick={() => go(id)}>
+            <strong>{title}</strong>
+            <span className="muted">{desc}</span>
+          </button>
+        ))}
+      </div>
+      <div className="card install-card">
+        <h3>把暖窝放到手机主屏幕</h3>
+        <p className="muted">
+          iPhone：用 Safari 打开本页 → 底部分享 →「添加到主屏幕」。安卓 Chrome：菜单 →「添加到主屏幕」。之后像 App 一样全屏使用。
+        </p>
+        <p className="muted">家里同一 Wi‑Fi 访问 http://NAS的IP:8080 即可。</p>
+      </div>
+      <p className="muted" style={{ marginTop: 16 }}>
+        当前：{me?.user.display_name} · {me?.user.role === "owner" ? "家长" : "成员"}
+      </p>
+      <button className="btn ghost" style={{ marginTop: 8, width: "100%" }} onClick={logout}>
+        离开暖窝
+      </button>
+    </>
   );
 }
 
@@ -214,12 +280,15 @@ function Home({ token, me, go }) {
     <>
       <div className="topbar">
         <div>
-          <h2 className="hello">晚上好，{me?.user.display_name}。窝窝守着账本呢。</h2>
+          <h2 className="hello">
+            <span className="hello-full">晚上好，{me?.user.display_name}。窝窝守着账本呢。</span>
+            <span className="hello-short">你好，{me?.user.display_name}</span>
+          </h2>
           <p className="sub">
-            {dash.period.year} 年 {dash.period.month} 月 · 生活账与经营账已经分开，饼图只看家庭日常。
+            {dash.period.year} 年 {dash.period.month} 月 · 生活账与经营账已分开
           </p>
         </div>
-        <button className="btn" onClick={() => go("add")}>
+        <button className="btn desktop-only" onClick={() => go("add")}>
           记一笔
         </button>
       </div>
@@ -245,7 +314,7 @@ function Home({ token, me, go }) {
       <div className="row two">
         <div className="card">
           <h3>近半年家庭收支</h3>
-          <div style={{ height: 240 }}>
+          <div className="chart-box">
             <ResponsiveContainer>
               <AreaChart data={dash.trend}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#efe6dc" />
@@ -260,7 +329,7 @@ function Home({ token, me, go }) {
         </div>
         <div className="card">
           <h3>家庭支出构成</h3>
-          <div style={{ height: 240 }}>
+          <div className="chart-box">
             <ResponsiveContainer>
               <PieChart>
                 <Pie data={dash.by_category} dataKey="value" nameKey="name" innerRadius={48} outerRadius={80}>
@@ -356,7 +425,7 @@ function Books({ token }) {
     <>
       <h2 className="hello">三本账，三种心情</h2>
       <p className="sub">个人日常、家庭公共、经营副业。点开账本看流水。</p>
-      <div className="chips" style={{ margin: "16px 0" }}>
+      <div className="chips chips-scroll" style={{ margin: "16px 0" }}>
         {ledgers.map((l) => (
           <button key={l.id} className={`chip ${active === l.id ? "on" : ""}`} onClick={() => setActive(l.id)}>
             {l.icon} {l.name}
@@ -433,10 +502,30 @@ function Add({ token, show }) {
   return (
     <>
       <h2 className="hello">轻轻记一笔</h2>
-      <form className="card form-grid" onSubmit={submit} style={{ marginTop: 16 }}>
+      <form className="card form-grid add-form" onSubmit={submit} style={{ marginTop: 16 }}>
+        <div className="chips" style={{ gridColumn: "1 / -1" }}>
+          <button type="button" className={`chip ${form.type === "expense" ? "on" : ""}`} onClick={() => setForm({ ...form, type: "expense", category_id: "" })}>
+            支出
+          </button>
+          <button type="button" className={`chip ${form.type === "income" ? "on" : ""}`} onClick={() => setForm({ ...form, type: "income", category_id: "" })}>
+            收入
+          </button>
+        </div>
+        <label className="amount-field" style={{ gridColumn: "1 / -1" }}>
+          金额
+          <input
+            type="text"
+            inputMode="decimal"
+            pattern="[0-9]*[.]?[0-9]*"
+            value={form.amount}
+            onChange={(e) => setForm({ ...form, amount: e.target.value.replace(/[^\d.]/g, "") })}
+            placeholder="0.00"
+            required
+          />
+        </label>
         <label>
           账本
-          <select value={form.ledger_id} onChange={(e) => setForm({ ...form, ledger_id: e.target.value })}>
+          <select value={form.ledger_id} onChange={(e) => setForm({ ...form, ledger_id: e.target.value, category_id: "" })}>
             {ledgers.map((l) => (
               <option key={l.id} value={l.id}>
                 {l.icon} {l.name}
@@ -454,33 +543,26 @@ function Add({ token, show }) {
             ))}
           </select>
         </label>
-        <div className="chips" style={{ gridColumn: "1 / -1" }}>
-          <button type="button" className={`chip ${form.type === "expense" ? "on" : ""}`} onClick={() => setForm({ ...form, type: "expense" })}>
-            支出
-          </button>
-          <button type="button" className={`chip ${form.type === "income" ? "on" : ""}`} onClick={() => setForm({ ...form, type: "income" })}>
-            收入
-          </button>
-        </div>
-        <label>
-          金额
-          <input type="number" step="0.01" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} required />
-        </label>
-        <label>
-          分类
-          <select value={form.category_id} onChange={(e) => setForm({ ...form, category_id: e.target.value })}>
+        <div className="cat-block" style={{ gridColumn: "1 / -1" }}>
+          <span className="cat-label">分类</span>
+          <div className="chips">
             {filteredCats.map((c) => (
-              <option key={c.id} value={c.id}>
+              <button
+                type="button"
+                key={c.id}
+                className={`chip ${String(form.category_id || filteredCats[0]?.id) === String(c.id) ? "on" : ""}`}
+                onClick={() => setForm({ ...form, category_id: c.id })}
+              >
                 {c.icon} {c.name}
-              </option>
+              </button>
             ))}
-          </select>
-        </label>
+          </div>
+        </div>
         <label style={{ gridColumn: "1 / -1" }}>
           备注
           <input value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} placeholder="午饭 / 客户尾款 / 水电…" />
         </label>
-        <button className="btn" style={{ gridColumn: "1 / -1" }}>
+        <button className="btn add-submit" style={{ gridColumn: "1 / -1" }}>
           放进暖窝
         </button>
       </form>
@@ -687,6 +769,7 @@ function AiPanel({ token, show, me }) {
       {logs.length > 0 && (
         <div className="card" style={{ marginTop: 16 }}>
           <h3>入账审计</h3>
+          <div className="table-wrap">
           <table className="table">
             <thead>
               <tr>
@@ -705,6 +788,7 @@ function AiPanel({ token, show, me }) {
               ))}
             </tbody>
           </table>
+          </div>
         </div>
       )}
     </>
