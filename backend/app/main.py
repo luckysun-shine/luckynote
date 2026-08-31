@@ -565,7 +565,15 @@ def remove_ledger(ledger_id: int, user: User = Depends(current_user), db: Sessio
         raise HTTPException(404, "账本不存在")
     used = db.query(Transaction).filter(Transaction.ledger_id == ledger_id).first()
     if used:
-        raise HTTPException(400, "账本已有流水，无法删除")
+        raise HTTPException(400, "账本仍有流水，请先删除或移走全部流水后再删账本")
+    db.query(Budget).filter(Budget.ledger_id == ledger_id).delete(synchronize_session=False)
+    linked_accounts = db.query(Account).filter(Account.ledger_id == ledger_id).all()
+    for acc in linked_accounts:
+        has_tx = db.query(Transaction).filter(Transaction.account_id == acc.id).first()
+        if has_tx:
+            acc.ledger_id = None
+        else:
+            db.delete(acc)
     delete_media(row.cover_path)
     db.delete(row)
     db.commit()

@@ -79,7 +79,9 @@ def test_ledgers_and_avatar_upload():
     from io import BytesIO
 
     with TestClient(app) as client:
-        res = client.post("/api/v1/auth/login", json={"username": "lin", "password": "luckynote2"})
+        res = client.post("/api/v1/auth/login", json={"username": "lin", "password": "luckynote"})
+        if res.status_code != 200:
+            res = client.post("/api/v1/auth/login", json={"username": "lin", "password": "luckynote2"})
         token = res.json()["token"]
         headers = {"Authorization": f"Bearer {token}"}
 
@@ -136,8 +138,17 @@ def test_ledgers_and_avatar_upload():
         deleted = client.delete(f"/api/v1/ledgers/{lid}", headers=headers)
         assert deleted.status_code == 200
 
+        # 清空流水后应能删除带关联资金账户的经营账本
+        biz = next(l for l in client.get("/api/v1/ledgers", headers=headers).json() if l["type"] == "business")
+        biz_id = biz["id"]
+        biz_txs = client.get(f"/api/v1/transactions?ledger_id={biz_id}", headers=headers).json()
+        for t in biz_txs:
+            client.delete(f"/api/v1/transactions/{t['id']}", headers=headers)
+        del_biz = client.delete(f"/api/v1/ledgers/{biz_id}", headers=headers)
+        assert del_biz.status_code == 200, del_biz.text
+
         after = client.get("/api/v1/ledgers", headers=headers)
-        assert len(after.json()) == before
+        assert len(after.json()) == before - 1  # 额外删除了种子经营账本
 
 
 def test_transaction_patch_and_delete():
