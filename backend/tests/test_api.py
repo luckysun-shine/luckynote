@@ -138,3 +138,52 @@ def test_ledgers_and_avatar_upload():
 
         after = client.get("/api/v1/ledgers", headers=headers)
         assert len(after.json()) == before
+
+
+def test_transaction_patch_and_delete():
+    with TestClient(app) as client:
+        res = client.post("/api/v1/auth/login", json={"username": "lin", "password": "luckynote"})
+        if res.status_code != 200:
+            res = client.post("/api/v1/auth/login", json={"username": "lin", "password": "luckynote2"})
+        token = res.json()["token"]
+        headers = {"Authorization": f"Bearer {token}"}
+
+        txs = client.get("/api/v1/transactions?limit=1", headers=headers)
+        assert txs.status_code == 200
+        tx = txs.json()[0]
+        tx_id = tx["id"]
+
+        patched = client.patch(
+            f"/api/v1/transactions/{tx_id}",
+            headers=headers,
+            json={"amount": tx["amount"] + 1, "note": "测试改备注"},
+        )
+        assert patched.status_code == 200
+        assert patched.json()["note"] == "测试改备注"
+
+        created = client.post(
+            "/api/v1/transactions",
+            headers=headers,
+            json={
+                "ledger_id": tx["ledger_id"],
+                "account_id": tx["account_id"],
+                "category_id": tx["category_id"],
+                "type": "expense",
+                "amount": 1.23,
+                "note": "待删除",
+            },
+        )
+        assert created.status_code == 200
+        del_id = created.json()["id"]
+
+        deleted = client.delete(f"/api/v1/transactions/{del_id}", headers=headers)
+        assert deleted.status_code == 200
+
+        yuan = client.post("/api/v1/auth/login", json={"username": "yuan", "password": "luckynote"})
+        yuan_headers = {"Authorization": f"Bearer {yuan.json()["token"]}"}
+        forbidden = client.patch(
+            f"/api/v1/transactions/{tx_id}",
+            headers=yuan_headers,
+            json={"note": "越权"},
+        )
+        assert forbidden.status_code == 403

@@ -115,6 +115,13 @@ function canEditLedger(me, ledger) {
   return (ledger.type === "family" || ledger.type === "business") && me.user.role === "member";
 }
 
+function canEditTx(me, t) {
+  if (!me?.user || !t) return false;
+  if (me.user.role === "viewer") return false;
+  if (me.user.role === "owner") return true;
+  return t.user_id === me.user.id;
+}
+
 function Fox({ size = 86 }) {
   return (
     <svg className="mascot" width={size} height={size} viewBox="0 0 120 120" aria-hidden>
@@ -245,9 +252,9 @@ export default function App() {
       <main className="main">
         <div className="page-stack">
         {page === "home" && <Home token={token} me={me} go={setPage} />}
-        {page === "books" && <Books token={token} />}
+        {page === "books" && <Books token={token} me={me} show={show} />}
         {page === "add" && <Add token={token} show={show} />}
-        {page === "biz" && <Biz token={token} />}
+        {page === "biz" && <Biz token={token} me={me} show={show} />}
         {page === "budget" && <Budget token={token} show={show} />}
         {(page === "settings" || page === "accounts" || page === "family") && (
           <SettingsPanel token={token} me={me} show={show} onMeUpdate={setMe} />
@@ -475,9 +482,24 @@ function Home({ token, me, go }) {
   );
 }
 
-function TxRow({ t }) {
+function TxRow({ t, canEdit, onEdit }) {
   return (
-    <div className="tx">
+    <div
+      className={`tx ${canEdit ? "editable" : ""}`}
+      onClick={canEdit ? () => onEdit(t) : undefined}
+      role={canEdit ? "button" : undefined}
+      tabIndex={canEdit ? 0 : undefined}
+      onKeyDown={
+        canEdit
+          ? (e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                onEdit(t);
+              }
+            }
+          : undefined
+      }
+    >
       <div className="icon-bubble" style={{ background: t.category_color + "33" }}>
         {t.category_icon}
       </div>
@@ -487,6 +509,7 @@ function TxRow({ t }) {
         </div>
         <div className="muted tx-meta">
           {t.ledger_name} · {t.occurred_at.slice(0, 10)} · {t.source === "ai_wechat" ? "微信入账" : "手工"}
+          {canEdit && <span className="tx-edit-hint"> · 点击编辑</span>}
         </div>
       </div>
       <div className={`amount ${t.type}`}>
@@ -496,25 +519,244 @@ function TxRow({ t }) {
   );
 }
 
-function Books({ token }) {
+function txFormFromRow(t) {
+  const date = t.occurred_at?.slice(0, 10) || "";
+  return {
+    type: t.type,
+    amount: String(t.amount),
+    note: t.note || "",
+    ledger_id: t.ledger_id,
+    account_id: t.account_id,
+    category_id: t.category_id,
+    date,
+  };
+}
+
+function TxEditModal({ tx, token, me, ledgers, accounts, cats, onClose, onSaved, onDelete, show }) {
+  const [form, setForm] = useState(() => txFormFromRow(tx));
+  const ledger = ledgers.find((l) => String(l.id) === String(form.ledger_id));
+  const filteredCats = cats.filter(
+    (c) => c.kind === form.type && (!ledger || c.ledger_type === ledger.type)
+  );
+
+  useEffect(() => {
+    setForm(txFormFromRow(tx));
+  }, [tx]);
+
+  async function save(e) {
+    e.preventDefault();
+    try {
+      const body = {
+        type: form.type,
+        amount: Number(form.amount),
+        note: form.note,
+        ledger_id: Number(form.ledger_id),
+        account_id: Number(form.account_id),
+        category_id: Number(form.category_id || filteredCats[0]?.id),
+        occurred_at: `${form.date}T12:00:00`,
+      };
+      const updated = await api(`/api/v1/transactions/${tx.id}`, {
+        token,
+        method: "PATCH",
+        body,
+      });
+      show("流水已更新");
+      onSaved(updated);
+      onClose();
+    } catch (err) {
+      show(err.message);
+    }
+  }
+
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <form className="card modal tx-modal" onSubmit={save} onClick={(e) => e.stopPropagation()}>
+        <h3>编辑流水</h3>
+        <p className="muted" style={{ marginBottom: 12 }}>
+          {tx.user_name} 记的 · {tx.source === "ai_wechat" ? "微信入账" : "手工"}
+        </p>
+        <div className="chips" style={{ marginBottom: 12 }}>
+          <button
+            type="button"
+            className={`chip ${form.type === "expense" ? "on" : ""}`}
+            onClick={() => setForm({ ...form, type: "expense", category_id: "" })}
+          >
+            支出
+          </button>
+          <button
+            type="button"
+            className={`chip ${form.type === "income" ? "on" : ""}`}
+            onClick={() => setForm({ ...form, type: "income", category_id: "" })}
+          >
+            收入
+          </button>
+        </div>
+        <label>
+          金额
+          <input
+            type="text"
+            inputMode="decimal"
+            value={form.amount}
+            onChange={(e) => setForm({ ...form, amount: e.target.value.replace(/[^\d.]/g, "") })}
+            required
+          />
+        </label>
+        <label>
+          日期
+          <input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} required />
+        </label>
+        <label>
+          账本
+          <select
+            value={form.ledger_id}
+            onChange={(e) => setForm({ ...form, ledger_id: e.target.value, category_id: "" })}
+          >
+            {ledgers.map((l) => (
+              <option key={l.id} value={l.id}>
+                {l.icon} {l.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          账户
+          <select value={form.account_id} onChange={(e) => setForm({ ...form, account_id: e.target.value })}>
+            {accounts.map((a) => (
+              <option key={a.id} value={a.id}>
+                {a.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <div style={{ marginTop: 8 }}>
+          <span className="cat-label">分类</span>
+          <div className="chips">
+            {filteredCats.map((c) => (
+              <button
+                type="button"
+                key={c.id}
+                className={`chip ${String(form.category_id) === String(c.id) ? "on" : ""}`}
+                onClick={() => setForm({ ...form, category_id: c.id })}
+              >
+                {c.icon} {c.name}
+              </button>
+            ))}
+          </div>
+        </div>
+        <label style={{ marginTop: 12 }}>
+          备注
+          <input value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} />
+        </label>
+        <div className="modal-actions">
+          {canEditTx(me, tx) && (
+            <button type="button" className="btn ghost" onClick={() => onDelete(tx)}>
+              删除
+            </button>
+          )}
+          <button type="button" className="btn ghost" onClick={onClose}>
+            取消
+          </button>
+          <button className="btn">保存</button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+function TransactionList({ token, me, show, query, emptyText = "还没有流水。" }) {
+  const [rows, setRows] = useState([]);
+  const [ledgers, setLedgers] = useState([]);
+  const [accounts, setAccounts] = useState([]);
+  const [cats, setCats] = useState([]);
+  const [editTx, setEditTx] = useState(null);
+
+  const qs = Object.entries(query || {})
+    .filter(([, v]) => v != null && v !== "")
+    .map(([k, v]) => `${k}=${encodeURIComponent(v)}`)
+    .join("&");
+
+  function loadRows() {
+    const path = `/api/v1/transactions?limit=80${qs ? `&${qs}` : ""}`;
+    return api(path, { token }).then(setRows);
+  }
+
+  useEffect(() => {
+    if (!query || Object.values(query).some((v) => v != null && v !== "")) {
+      loadRows();
+    }
+  }, [token, qs]);
+
+  useEffect(() => {
+    setEditTx(null);
+  }, [qs]);
+
+  useEffect(() => {
+    Promise.all([
+      api("/api/v1/ledgers", { token }),
+      api("/api/v1/accounts", { token }),
+      api("/api/v1/categories", { token }),
+    ]).then(([l, a, c]) => {
+      setLedgers(l);
+      setAccounts(a);
+      setCats(c);
+    });
+  }, [token]);
+
+  async function deleteTx(t) {
+    if (!window.confirm("确定删除这笔流水？删除后无法恢复。")) return;
+    try {
+      await api(`/api/v1/transactions/${t.id}`, { token, method: "DELETE" });
+      show("流水已删除");
+      setEditTx(null);
+      loadRows();
+    } catch (err) {
+      show(err.message);
+    }
+  }
+
+  return (
+    <>
+      {rows.map((t) => (
+        <TxRow
+          key={t.id}
+          t={t}
+          canEdit={canEditTx(me, t)}
+          onEdit={(row) => setEditTx(row)}
+        />
+      ))}
+      {rows.length === 0 && <p className="muted">{emptyText}</p>}
+      {editTx && (
+        <TxEditModal
+          tx={editTx}
+          token={token}
+          me={me}
+          ledgers={ledgers}
+          accounts={accounts}
+          cats={cats}
+          show={show}
+          onClose={() => setEditTx(null)}
+          onSaved={() => loadRows()}
+          onDelete={deleteTx}
+        />
+      )}
+    </>
+  );
+}
+
+function Books({ token, me, show }) {
   const [ledgers, setLedgers] = useState([]);
   const [active, setActive] = useState(null);
-  const [rows, setRows] = useState([]);
   useEffect(() => {
     api("/api/v1/ledgers", { token }).then((ls) => {
       setLedgers(ls);
       setActive(ls[0]?.id);
     });
   }, [token]);
-  useEffect(() => {
-    if (!active) return;
-    api(`/api/v1/transactions?ledger_id=${active}&limit=80`, { token }).then(setRows);
-  }, [token, active]);
   const current = ledgers.find((l) => l.id === active);
   return (
     <div className="books-page">
       <h2 className="hello">三本账，三种心情</h2>
-      <p className="sub">个人日常、家庭公共、经营副业。点开账本看流水。</p>
+      <p className="sub">个人日常、家庭公共、经营副业。点开账本看流水，点击流水可编辑或删除。</p>
       <div className="ledger-tabs">
         {ledgers.map((l) => (
           <button key={l.id} className={`chip ledger-chip ${active === l.id ? "on" : ""}`} onClick={() => setActive(l.id)}>
@@ -534,10 +776,15 @@ function Books({ token }) {
         </>
       )}
       <div className="card books-list">
-        {rows.map((t) => (
-          <TxRow key={t.id} t={t} />
-        ))}
-        {rows.length === 0 && <p className="muted">这本账还空着，去记一笔吧。</p>}
+        {active && (
+          <TransactionList
+            token={token}
+            me={me}
+            show={show}
+            query={{ ledger_id: active }}
+            emptyText="这本账还空着，去记一笔吧。"
+          />
+        )}
       </div>
     </div>
   );
@@ -672,18 +919,16 @@ function Add({ token, show }) {
   );
 }
 
-function Biz({ token }) {
+function Biz({ token, me, show }) {
   const [dash, setDash] = useState(null);
-  const [rows, setRows] = useState([]);
   useEffect(() => {
     api("/api/v1/dashboard", { token }).then(setDash);
-    api("/api/v1/transactions?ledger_type=business", { token }).then(setRows);
   }, [token]);
   if (!dash) return null;
   return (
     <>
       <h2 className="hello">经营账本 · 副业小摊</h2>
-      <p className="sub">进账、进货、订阅费都在这里。生活饼图不会被「进货 2000」带跑。</p>
+      <p className="sub">进账、进货、订阅费都在这里。点击流水可编辑或删除。</p>
       <div className="row three" style={{ marginTop: 16 }}>
         <div className="card sage">
           <div className="label">经营收入</div>
@@ -699,9 +944,13 @@ function Biz({ token }) {
         </div>
       </div>
       <div className="card" style={{ marginTop: 16 }}>
-        {rows.map((t) => (
-          <TxRow key={t.id} t={t} />
-        ))}
+        <TransactionList
+          token={token}
+          me={me}
+          show={show}
+          query={{ ledger_type: "business" }}
+          emptyText="经营账还没有流水。"
+        />
       </div>
     </>
   );

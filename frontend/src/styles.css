@@ -252,6 +252,27 @@ button {
   max-width: 100%;
 }
 
+.tx.editable {
+  cursor: pointer;
+  border-radius: 12px;
+  transition: background 0.15s ease;
+}
+
+.tx.editable:hover,
+.tx.editable:focus-visible {
+  background: rgba(224, 122, 95, 0.08);
+  outline: none;
+}
+
+.tx-edit-hint {
+  color: var(--coral);
+  font-size: 12px;
+}
+
+.tx-modal {
+  max-width: 480px;
+}
+
 .tx-body {
   min-width: 0;
   overflow: hidden;
