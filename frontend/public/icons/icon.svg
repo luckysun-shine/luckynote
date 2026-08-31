@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFF9F4"/>
+      <stop offset="45%" stop-color="#FBF6F0"/>
+      <stop offset="100%" stop-color="#F4E8DC"/>
+    </linearGradient>
+    <radialGradient id="glowSage" cx="15%" cy="20%" r="55%">
+      <stop offset="0%" stop-color="#D8F3DC" stop-opacity="0.9"/>
+      <stop offset="100%" stop-color="#D8F3DC" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="glowCoral" cx="88%" cy="18%" r="50%">
+      <stop offset="0%" stop-color="#FFE8D6" stop-opacity="0.95"/>
+      <stop offset="100%" stop-color="#FFE8D6" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="glowButter" cx="50%" cy="95%" r="45%">
+      <stop offset="0%" stop-color="#F2CC8F" stop-opacity="0.35"/>
+      <stop offset="100%" stop-color="#F2CC8F" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="soft" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="6" stdDeviation="8" flood-color="#3D405B" flood-opacity="0.12"/>
+    </filter>
+  </defs>
+  <rect width="512" height="512" fill="url(#bg)"/>
+  <rect width="512" height="512" fill="url(#glowSage)"/>
+  <rect width="512" height="512" fill="url(#glowCoral)"/>
+  <rect width="512" height="512" fill="url(#glowButter)"/>
+  <g opacity="0.55">
+    <rect x="72" y="88" width="56" height="72" rx="10" fill="#81B29A" transform="rotate(-12 100 124)"/>
+    <rect x="80" y="96" width="56" height="72" rx="10" fill="#FFF9F4" stroke="#81B29A" stroke-width="3" transform="rotate(-12 108 132)"/>
+    <path d="M92 118h36M92 132h28" stroke="#81B29A" stroke-width="4" stroke-linecap="round" transform="rotate(-12 108 132)"/>
+  </g>
+  <g opacity="0.45">
+    <rect x="372" y="96" width="48" height="64" rx="9" fill="#E07A5F" transform="rotate(14 396 128)"/>
+    <rect x="380" y="104" width="48" height="64" rx="9" fill="#FFF9F4" stroke="#E07A5F" stroke-width="3" transform="rotate(14 404 136)"/>
+  </g>
+  <g filter="url(#soft)" transform="translate(76, 58) scale(3)">
+    <ellipse cx="60" cy="102" rx="28" ry="8" fill="#E8D5C4"/>
+    <rect x="38" y="70" width="44" height="30" rx="10" fill="#F2CC8F"/>
+    <path d="M44 78h32v8H44z" fill="#E07A5F"/>
+    <circle cx="60" cy="52" r="28" fill="#E07A5F"/>
+    <path d="M34 40 L42 18 L54 40 Z" fill="#C45C42"/>
+    <path d="M86 40 L78 18 L66 40 Z" fill="#C45C42"/>
+    <circle cx="50" cy="52" r="5" fill="#3D405B"/>
+    <circle cx="70" cy="52" r="5" fill="#3D405B"/>
+    <circle cx="51.5" cy="50.5" r="1.6" fill="#FFFFFF"/>
+    <circle cx="71.5" cy="50.5" r="1.6" fill="#FFFFFF"/>
+    <ellipse cx="60" cy="62" rx="5" ry="3.5" fill="#3D405B"/>
+    <path d="M48 66 Q60 74 72 66" fill="none" stroke="#3D405B" stroke-width="2.2" stroke-linecap="round"/>
+    <circle cx="28" cy="58" r="7" fill="#E07A5F"/>
+    <circle cx="92" cy="58" r="7" fill="#E07A5F"/>
+  </g>
+  <rect x="0" y="468" width="512" height="44" fill="#E07A5F" opacity="0.08"/>
+</svg>

@@ -1,0 +1,16 @@
+services:
+  luckynote:
+    build: .
+    container_name: luckynote
+    restart: unless-stopped
+    ports:
+      - "8907:8907"
+    environment:
+      LUCKYNOTE_SECRET: ${LUCKYNOTE_SECRET:-please-change-me}
+      LUCKYNOTE_DATA_DIR: /data
+      TZ: Asia/Shanghai
+    volumes:
+      - luckynote-data:/data
+
+volumes:
+  luckynote-data:

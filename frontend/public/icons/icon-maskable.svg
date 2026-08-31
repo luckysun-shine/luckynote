@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="mbg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFF9F4"/>
+      <stop offset="100%" stop-color="#F4E8DC"/>
+    </linearGradient>
+    <filter id="msoft" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#3D405B" flood-opacity="0.1"/>
+    </filter>
+  </defs>
+  <rect width="512" height="512" fill="url(#mbg)"/>
+  <rect width="512" height="512" fill="#D8F3DC" opacity="0.25"/>
+  <g filter="url(#msoft)" transform="translate(118, 108) scale(2.35)">
+    <ellipse cx="60" cy="102" rx="28" ry="8" fill="#E8D5C4"/>
+    <rect x="38" y="70" width="44" height="30" rx="10" fill="#F2CC8F"/>
+    <path d="M44 78h32v8H44z" fill="#E07A5F"/>
+    <circle cx="60" cy="52" r="28" fill="#E07A5F"/>
+    <path d="M34 40 L42 18 L54 40 Z" fill="#C45C42"/>
+    <path d="M86 40 L78 18 L66 40 Z" fill="#C45C42"/>
+    <circle cx="50" cy="52" r="5" fill="#3D405B"/>
+    <circle cx="70" cy="52" r="5" fill="#3D405B"/>
+    <circle cx="51.5" cy="50.5" r="1.6" fill="#FFFFFF"/>
+    <circle cx="71.5" cy="50.5" r="1.6" fill="#FFFFFF"/>
+    <ellipse cx="60" cy="62" rx="5" ry="3.5" fill="#3D405B"/>
+    <path d="M48 66 Q60 74 72 66" fill="none" stroke="#3D405B" stroke-width="2.2" stroke-linecap="round"/>
+    <circle cx="28" cy="58" r="7" fill="#E07A5F"/>
+    <circle cx="92" cy="58" r="7" fill="#E07A5F"/>
+  </g>
+</svg>
