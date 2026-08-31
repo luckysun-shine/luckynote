@@ -204,12 +204,32 @@ OpenClaw 已完成语音转写时，Skill 把**文本或结构化 JSON**发给 L
 
 ---
 
-## 9. NAS Docker 部署要点
+## 9. NAS Docker 部署与更新
 
-1. 映射 `8907:8907`，数据卷 `./data:/data`。
+### 部署
+
+1. 映射 `8907:8907`，数据目录使用 Docker 卷 `luckynote-data` 挂载到容器 `/data`（见 `docker-compose.yml`）。
 2. 与 OpenClaw 同一 Docker 网络，或用 NAS 网关 IP 互访。
 3. 勿把 8907 直接暴露公网；需要时走 Tailscale / 反向代理 + 强密码。
-4. 定期复制 `luckynote.db` 到另一块盘。
+
+### 数据持久化
+
+- 数据库：`/data/luckynote.db`
+- 上传：`/data/uploads/`（头像、账本封面）
+- 备份：`/data/backups/`、`/data/backup-config.json`
+
+数据在独立卷中，**与镜像分离**；`docker compose up -d --build` 更新程序不会清空卷内文件。
+
+### 更新（保留数据）
+
+```bash
+git pull
+docker compose up -d --build
+```
+
+**禁止** `docker compose down -v`（会删除 `luckynote-data` 卷）。大版本更新前建议在应用内「数据备份」手动备份一次。
+
+启动时 `ensure_schema()` 仅追加表结构，不重置业务数据；`seed_if_empty()` 仅在空库时写入演示账号。
 
 ---
 
