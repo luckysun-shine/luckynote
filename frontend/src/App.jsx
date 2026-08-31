@@ -297,7 +297,7 @@ function Login({ onLogin, show, toast }) {
     e.preventDefault();
     try {
       const data = await api("/api/v1/auth/login", { method: "POST", body: { username, password } });
-      onLogin(data.token, data.user);
+      onLogin(data.token);
     } catch (err) {
       show(err.message);
     }
