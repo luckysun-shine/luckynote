@@ -1,6 +1,6 @@
 {
-  "name": "LuckyNote 暖窝账本",
-  "short_name": "暖窝账本",
+  "name": "lucky账本 · LuckyNote",
+  "short_name": "lucky账本",
   "description": "家庭记账，手机随时记一笔",
   "start_url": "/",
   "scope": "/",

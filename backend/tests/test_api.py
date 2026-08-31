@@ -161,6 +161,15 @@ def test_transaction_patch_and_delete():
         assert patched.status_code == 200
         assert patched.json()["note"] == "测试改备注"
 
+        username_patch = client.patch(
+            "/api/v1/me",
+            headers=headers,
+            json={"username": "lin_edited"},
+        )
+        assert username_patch.status_code == 200
+        assert username_patch.json()["username"] == "lin_edited"
+        client.patch("/api/v1/me", headers=headers, json={"username": "lin"})
+
         created = client.post(
             "/api/v1/transactions",
             headers=headers,

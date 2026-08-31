@@ -141,6 +141,7 @@ class MemberPatch(BaseModel):
 
 
 class MePatch(BaseModel):
+    username: Optional[str] = Field(default=None, min_length=2, max_length=40)
     display_name: Optional[str] = None
     wechat_alias: Optional[str] = None
     avatar_color: Optional[str] = None
@@ -325,6 +326,13 @@ def me(user: User = Depends(current_user), db: Session = Depends(get_db)):
 
 @app.patch("/api/v1/me")
 def patch_me(body: MePatch, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    if body.username is not None:
+        new_username = body.username.strip()
+        if not new_username:
+            raise HTTPException(400, "登录名不能为空")
+        if db.query(User).filter(User.username == new_username, User.id != user.id).first():
+            raise HTTPException(400, "登录名已被占用")
+        user.username = new_username
     if body.display_name is not None:
         user.display_name = body.display_name.strip()
     if body.wechat_alias is not None:
@@ -580,6 +588,15 @@ def accounts(user: User = Depends(current_user), db: Session = Depends(get_db)):
     ]
 
 
+ALLOWED_ACCOUNT_KINDS = {"cash", "bank", "ewallet", "credit", "business"}
+
+
+def _validate_account_kind(kind: str) -> str:
+    if kind not in ALLOWED_ACCOUNT_KINDS:
+        raise HTTPException(400, "账户类型无效")
+    return kind
+
+
 @app.post("/api/v1/accounts")
 def create_account(body: AccountIn, user: User = Depends(current_user), db: Session = Depends(get_db)):
     if user.role == "viewer":
@@ -587,7 +604,7 @@ def create_account(body: AccountIn, user: User = Depends(current_user), db: Sess
     acc = Account(
         household_id=user.household_id,
         name=body.name.strip(),
-        kind=body.kind,
+        kind=_validate_account_kind(body.kind),
         opening_balance=body.opening_balance,
         owner_user_id=body.owner_user_id,
         ledger_id=body.ledger_id,
@@ -620,7 +637,7 @@ def patch_account(
     if body.name is not None:
         acc.name = body.name.strip()
     if body.kind is not None:
-        acc.kind = body.kind
+        acc.kind = _validate_account_kind(body.kind)
     if body.opening_balance is not None:
         acc.opening_balance = body.opening_balance
     db.commit()

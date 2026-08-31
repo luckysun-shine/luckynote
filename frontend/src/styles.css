@@ -94,6 +94,49 @@ button {
   padding: 0 8px 24px;
 }
 
+.brand-clickable {
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+}
+
+.brand-clickable:hover {
+  opacity: 0.88;
+}
+
+.brand-clickable:focus-visible {
+  outline: 2px solid var(--coral);
+  outline-offset: 4px;
+  border-radius: 14px;
+}
+
+.brand-avatar {
+  border-radius: 16px;
+}
+
+.header-avatar-btn {
+  border: none;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+  border-radius: 50%;
+  flex-shrink: 0;
+  line-height: 0;
+}
+
+.header-avatar-btn:focus-visible {
+  outline: 2px solid var(--coral);
+  outline-offset: 3px;
+}
+
+.login-brand {
+  font-size: 34px;
+  margin: 0 0 12px;
+}
+
 .mascot {
   width: 54px;
   height: 54px;

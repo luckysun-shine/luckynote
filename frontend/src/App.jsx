@@ -122,33 +122,27 @@ function canEditTx(me, t) {
   return t.user_id === me.user.id;
 }
 
-function Fox({ size = 86 }) {
-  return (
-    <svg className="mascot" width={size} height={size} viewBox="0 0 120 120" aria-hidden>
-      <ellipse cx="60" cy="102" rx="28" ry="8" fill="#e8d5c4" />
-      <rect x="38" y="70" width="44" height="30" rx="10" fill="#f2cc8f" />
-      <path d="M44 78h32v8H44z" fill="#e07a5f" />
-      <circle cx="60" cy="52" r="28" fill="#e07a5f" />
-      <path d="M34 40 L42 18 L54 40 Z" fill="#c45c42" />
-      <path d="M86 40 L78 18 L66 40 Z" fill="#c45c42" />
-      <circle cx="50" cy="52" r="5" fill="#3d405b" />
-      <circle cx="70" cy="52" r="5" fill="#3d405b" />
-      <circle cx="51.5" cy="50.5" r="1.6" fill="#fff" />
-      <circle cx="71.5" cy="50.5" r="1.6" fill="#fff" />
-      <ellipse cx="60" cy="62" rx="5" ry="3.5" fill="#3d405b" />
-      <path d="M48 66 Q60 74 72 66" fill="none" stroke="#3d405b" strokeWidth="2.2" strokeLinecap="round" />
-      <circle cx="28" cy="58" r="7" fill="#e07a5f" />
-      <circle cx="92" cy="58" r="7" fill="#e07a5f" />
-    </svg>
-  );
-}
-
 function money(n) {
   return Number(n || 0).toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+const ACCOUNT_KIND_LABELS = {
+  cash: "现金",
+  bank: "银行卡",
+  ewallet: "微信/支付宝",
+  credit: "信用卡",
+  business: "经营收款",
+};
+const ACCOUNT_KINDS = Object.entries(ACCOUNT_KIND_LABELS);
+
+function accountKindLabel(kind) {
+  return ACCOUNT_KIND_LABELS[kind] || kind;
+}
+
+const BRAND_NAME = "lucky账本";
+
 const NAV = [
-  ["home", "暖窝总览"],
+  ["home", "总览"],
   ["books", "三本账"],
   ["add", "记一笔"],
   ["biz", "经营副业"],
@@ -174,7 +168,13 @@ export default function App() {
   const [token, setToken] = useState(localStorage.getItem("ln_token") || "");
   const [me, setMe] = useState(null);
   const [page, setPage] = useState("home");
+  const [settingsTab, setSettingsTab] = useState("profile");
   const [toast, setToast] = useState("");
+
+  function openSettings(tab = "profile") {
+    setSettingsTab(tab);
+    setPage("settings");
+  }
 
   function show(msg) {
     setToast(msg);
@@ -194,10 +194,9 @@ export default function App() {
   if (!token) {
     return (
       <Login
-        onLogin={(t, user) => {
+        onLogin={(t) => {
           localStorage.setItem("ln_token", t);
           setToken(t);
-          setMe({ user, household: { name: "暖窝一家" } });
         }}
         show={show}
         toast={toast}
@@ -213,22 +212,22 @@ export default function App() {
   return (
     <div className="shell">
       <header className="m-header">
-        <Fox size={40} />
+        <button type="button" className="header-avatar-btn" onClick={() => openSettings("profile")} aria-label="账户设置">
+          <UserAvatar user={me?.user} size={40} />
+        </button>
         <div className="m-header-text">
-          <strong className="brand-cn">暖窝账本</strong>
-          <span>
-            <UserAvatar user={me?.user} size={22} className="header-avatar" /> {me?.user.display_name} · {me?.household?.name}
-          </span>
+          <strong className="brand-cn">{BRAND_NAME}</strong>
+          <span>{me?.user.display_name} · {me?.household?.name}</span>
         </div>
       </header>
       <aside className="sider">
-        <div className="brand">
-          <Fox size={58} />
+        <button type="button" className="brand brand-clickable" onClick={() => openSettings("profile")}>
+          <UserAvatar user={me?.user} size={52} className="brand-avatar" />
           <div>
-            <h1 className="brand-cn">暖窝账本</h1>
+            <h1 className="brand-cn">{BRAND_NAME}</h1>
             <p>LuckyNote · 家庭小金库</p>
           </div>
-        </div>
+        </button>
         <nav className="nav">
           {NAV.map(([id, label]) => (
             <button key={id} className={page === id ? "active" : ""} onClick={() => setPage(id)}>
@@ -244,7 +243,7 @@ export default function App() {
             </div>
             <p className="muted">角色 {me.user.role === "owner" ? "家长" : "成员"}</p>
             <button className="btn ghost" style={{ marginTop: 10, width: "100%" }} onClick={logout}>
-              离开暖窝
+              退出登录
             </button>
           </div>
         )}
@@ -257,7 +256,13 @@ export default function App() {
         {page === "biz" && <Biz token={token} me={me} show={show} />}
         {page === "budget" && <Budget token={token} show={show} />}
         {(page === "settings" || page === "accounts" || page === "family") && (
-          <SettingsPanel token={token} me={me} show={show} onMeUpdate={setMe} />
+          <SettingsPanel
+            token={token}
+            me={me}
+            show={show}
+            onMeUpdate={setMe}
+            initialTab={settingsTab}
+          />
         )}
         {page === "backup" && <BackupPanel token={token} me={me} show={show} />}
         {page === "ai" && <AiPanel token={token} show={show} me={me} />}
@@ -302,17 +307,14 @@ function Login({ onLogin, show, toast }) {
     <div className="login-wrap">
       <div className="login-card">
         <div className="hero">
-          <Fox />
-          <h2>把每一笔生活，收进暖窝</h2>
-          <p className="sub">
-            家人各自记账，月底一起看家底；副业单独一本账。手机浏览器打开就能用，也可添加到主屏幕。
-          </p>
+          <h2 className="brand-cn login-brand">{BRAND_NAME}</h2>
+          <p className="sub">把每一笔生活，记进 lucky 账本。家人各自记账，月底一起看家底。</p>
           <p className="muted" style={{ marginTop: 24 }}>
             演示账号 lin / yuan，密码均为 luckynote
           </p>
         </div>
         <form className="login-form" onSubmit={submit}>
-          <h3>欢迎回家</h3>
+          <h3>欢迎回来</h3>
           <label>
             用户名
             <input autoComplete="username" value={username} onChange={(e) => setUsername(e.target.value)} />
@@ -322,7 +324,7 @@ function Login({ onLogin, show, toast }) {
             <input type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} />
           </label>
           <button className="btn" style={{ marginTop: 22, width: "100%" }}>
-            推开暖窝的门
+            登录
           </button>
         </form>
       </div>
@@ -351,7 +353,7 @@ function More({ go, logout, me }) {
         ))}
       </div>
       <div className="card install-card">
-        <h3>把暖窝放到手机主屏幕</h3>
+        <h3>添加到手机主屏幕</h3>
         <p className="muted">
           iPhone：用 Safari 打开本页 → 底部分享 →「添加到主屏幕」。安卓 Chrome：菜单 →「添加到主屏幕」。之后像 App 一样全屏使用。
         </p>
@@ -361,7 +363,7 @@ function More({ go, logout, me }) {
         当前：{me?.user.display_name} · {me?.user.role === "owner" ? "家长" : "成员"}
       </p>
       <button className="btn ghost" style={{ marginTop: 8, width: "100%" }} onClick={logout}>
-        离开暖窝
+        退出登录
       </button>
     </>
   );
@@ -623,7 +625,7 @@ function TxEditModal({ tx, token, me, ledgers, accounts, cats, onClose, onSaved,
           <select value={form.account_id} onChange={(e) => setForm({ ...form, account_id: e.target.value })}>
             {accounts.map((a) => (
               <option key={a.id} value={a.id}>
-                {a.name}
+                {a.name} · {accountKindLabel(a.kind)}
               </option>
             ))}
           </select>
@@ -887,7 +889,7 @@ function Add({ token, show }) {
           <select value={form.account_id} onChange={(e) => setForm({ ...form, account_id: e.target.value })}>
             {accounts.map((a) => (
               <option key={a.id} value={a.id}>
-                {a.name}
+                {a.name} · {accountKindLabel(a.kind)}
               </option>
             ))}
           </select>
@@ -912,7 +914,7 @@ function Add({ token, show }) {
           <input value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} placeholder="午饭 / 客户尾款 / 水电…" />
         </label>
         <button className="btn add-submit" style={{ gridColumn: "1 / -1" }}>
-          放进暖窝
+          保存
         </button>
       </form>
     </>
@@ -1003,13 +1005,6 @@ function Budget({ token, show }) {
 }
 
 const AVATAR_COLORS = ["#E07A5F", "#81B29A", "#F2CC8F", "#3D405B", "#C77DFF", "#D4A373"];
-const ACCOUNT_KINDS = [
-  ["cash", "现金"],
-  ["bank", "银行卡"],
-  ["ewallet", "微信/支付宝"],
-  ["credit", "信用卡"],
-  ["business", "经营收款"],
-];
 const ROLE_LABEL = { owner: "家长", member: "成员", viewer: "只读" };
 
 const LEDGER_TYPES = [
@@ -1019,9 +1014,10 @@ const LEDGER_TYPES = [
 ];
 const LEDGER_ICONS = ["📒", "🏠", "👤", "💼", "🎨", "🍜", "🚗", "🎁", "💰", "🐾", "📚", "🌿"];
 
-function SettingsPanel({ token, me, show, onMeUpdate }) {
-  const [tab, setTab] = useState("profile");
+function SettingsPanel({ token, me, show, onMeUpdate, initialTab = "profile" }) {
+  const [tab, setTab] = useState(initialTab);
   const [profile, setProfile] = useState({
+    username: "",
     display_name: "",
     wechat_alias: "",
     avatar_color: "#E07A5F",
@@ -1037,6 +1033,7 @@ function SettingsPanel({ token, me, show, onMeUpdate }) {
     role: "member",
   });
   const [walletForm, setWalletForm] = useState({ name: "", kind: "cash", opening_balance: "0" });
+  const [editWallet, setEditWallet] = useState(null);
   const [editMember, setEditMember] = useState(null);
   const [resetPwd, setResetPwd] = useState({ id: null, password: "" });
   const [ledgers, setLedgers] = useState([]);
@@ -1052,8 +1049,13 @@ function SettingsPanel({ token, me, show, onMeUpdate }) {
   const [avatarBusy, setAvatarBusy] = useState(false);
 
   useEffect(() => {
+    setTab(initialTab);
+  }, [initialTab]);
+
+  useEffect(() => {
     if (me?.user) {
       setProfile({
+        username: me.user.username,
         display_name: me.user.display_name,
         wechat_alias: me.user.wechat_alias || "",
         avatar_color: me.user.avatar_color,
@@ -1289,6 +1291,26 @@ function SettingsPanel({ token, me, show, onMeUpdate }) {
     }
   }
 
+  async function saveWalletEdit(e) {
+    e.preventDefault();
+    try {
+      await api(`/api/v1/accounts/${editWallet.id}`, {
+        token,
+        method: "PATCH",
+        body: {
+          name: editWallet.name,
+          kind: editWallet.kind,
+          opening_balance: Number(editWallet.opening_balance) || 0,
+        },
+      });
+      show("资金账户已更新");
+      setEditWallet(null);
+      loadWallets();
+    } catch (err) {
+      show(err.message);
+    }
+  }
+
   const isOwner = me?.user.role === "owner";
 
   return (
@@ -1324,7 +1346,14 @@ function SettingsPanel({ token, me, show, onMeUpdate }) {
             </div>
             <label>
               登录名
-              <input value={me?.user.username || ""} disabled />
+              <input
+                value={profile.username}
+                onChange={(e) => setProfile({ ...profile, username: e.target.value })}
+                autoComplete="username"
+                minLength={2}
+                maxLength={40}
+                required
+              />
             </label>
             <label>
               角色
@@ -1624,14 +1653,21 @@ function SettingsPanel({ token, me, show, onMeUpdate }) {
                 <div>
                   <strong>{w.name}</strong>
                   <div className="muted">
-                    {ACCOUNT_KINDS.find(([k]) => k === w.kind)?.[1] || w.kind} · 期初 ¥ {money(w.opening_balance)}
+                    {accountKindLabel(w.kind)} · 期初 ¥ {money(w.opening_balance)}
                   </div>
                 </div>
-                {isOwner && (
-                  <button type="button" className="btn ghost btn-sm" onClick={() => removeWallet(w.id)}>
-                    删除
-                  </button>
-                )}
+                <div className="member-actions">
+                  {me?.user.role !== "viewer" && (
+                    <button type="button" className="btn ghost btn-sm" onClick={() => setEditWallet({ ...w })}>
+                      编辑
+                    </button>
+                  )}
+                  {isOwner && (
+                    <button type="button" className="btn ghost btn-sm" onClick={() => removeWallet(w.id)}>
+                      删除
+                    </button>
+                  )}
+                </div>
               </div>
             ))}
             {wallets.length === 0 && <p className="muted">还没有资金账户，记帐时需要选择账户。</p>}
@@ -1673,6 +1709,50 @@ function SettingsPanel({ token, me, show, onMeUpdate }) {
             </form>
           )}
         </>
+      )}
+
+      {editWallet && (
+        <div className="modal-backdrop" onClick={() => setEditWallet(null)}>
+          <form className="card modal" onSubmit={saveWalletEdit} onClick={(e) => e.stopPropagation()}>
+            <h3>编辑资金账户 · {editWallet.name}</h3>
+            <label>
+              名称
+              <input
+                value={editWallet.name}
+                onChange={(e) => setEditWallet({ ...editWallet, name: e.target.value })}
+                required
+              />
+            </label>
+            <label>
+              类型
+              <select
+                value={editWallet.kind}
+                onChange={(e) => setEditWallet({ ...editWallet, kind: e.target.value })}
+              >
+                {ACCOUNT_KINDS.map(([k, label]) => (
+                  <option key={k} value={k}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              期初余额
+              <input
+                type="text"
+                inputMode="decimal"
+                value={editWallet.opening_balance}
+                onChange={(e) => setEditWallet({ ...editWallet, opening_balance: e.target.value })}
+              />
+            </label>
+            <div className="modal-actions">
+              <button type="button" className="btn ghost" onClick={() => setEditWallet(null)}>
+                取消
+              </button>
+              <button className="btn">保存</button>
+            </div>
+          </form>
+        </div>
       )}
 
       {editLedger && (
