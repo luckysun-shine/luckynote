@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "icons": "node scripts/generate-icons.mjs",
+    "icons": "python3 scripts/generate-icons-from-source.py",
+    "icons:svg": "node scripts/generate-icons.mjs",
     "preview": "vite preview"
   },
   "dependencies": {
