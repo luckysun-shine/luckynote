@@ -36,6 +36,85 @@ async function api(path, { method = "GET", token, body } = {}) {
   return res.json();
 }
 
+async function apiUpload(path, token, file) {
+  const form = new FormData();
+  form.append("file", file);
+  const res = await fetch(API + path, {
+    method: "POST",
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body: form,
+  });
+  if (!res.ok) {
+    let msg = "上传失败";
+    try {
+      const data = await res.json();
+      msg = data.detail || msg;
+    } catch {
+      /* ignore */
+    }
+    throw new Error(typeof msg === "string" ? msg : JSON.stringify(msg));
+  }
+  return res.json();
+}
+
+function UserAvatar({ user, size = 36, className = "" }) {
+  const name = user?.display_name || user?.username || "?";
+  const initial = name.slice(0, 1);
+  const px = size;
+  if (user?.avatar_url) {
+    return (
+      <img
+        className={`user-avatar ${className}`}
+        src={user.avatar_url}
+        alt={name}
+        width={px}
+        height={px}
+        style={{ width: px, height: px }}
+      />
+    );
+  }
+  return (
+    <span
+      className={`user-avatar dot-avatar ${className}`}
+      style={{ background: user?.avatar_color || "#81B29A", width: px, height: px, fontSize: px * 0.42 }}
+    >
+      {initial}
+    </span>
+  );
+}
+
+function LedgerThumb({ ledger, size = 40, className = "" }) {
+  const px = size;
+  if (ledger?.cover_url) {
+    return (
+      <img
+        className={`ledger-thumb ${className}`}
+        src={ledger.cover_url}
+        alt={ledger.name || "账本"}
+        width={px}
+        height={px}
+        style={{ width: px, height: px }}
+      />
+    );
+  }
+  return (
+    <span
+      className={`ledger-thumb icon-thumb ${className}`}
+      style={{ width: px, height: px, fontSize: px * 0.55 }}
+    >
+      {ledger?.icon || "📒"}
+    </span>
+  );
+}
+
+function canEditLedger(me, ledger) {
+  if (!me?.user || !ledger) return false;
+  if (me.user.role === "viewer") return false;
+  if (me.user.role === "owner") return true;
+  if (ledger.type === "personal" && ledger.owner_user_id === me.user.id) return true;
+  return (ledger.type === "family" || ledger.type === "business") && me.user.role === "member";
+}
+
 function Fox({ size = 86 }) {
   return (
     <svg className="mascot" width={size} height={size} viewBox="0 0 120 120" aria-hidden>
@@ -67,7 +146,7 @@ const NAV = [
   ["add", "记一笔"],
   ["biz", "经营副业"],
   ["budget", "预算"],
-  ["accounts", "账号管理"],
+  ["settings", "设置"],
   ["backup", "数据备份"],
   ["ai", "微信 / AI"],
 ];
@@ -80,7 +159,7 @@ const TABS = [
   { id: "more", label: "更多", icon: "✦" },
 ];
 
-const MORE_PAGES = ["more", "budget", "accounts", "backup", "ai"];
+const MORE_PAGES = ["more", "budget", "settings", "accounts", "backup", "ai"];
 
 const WEEKDAYS = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"];
 
@@ -130,7 +209,9 @@ export default function App() {
         <Fox size={40} />
         <div className="m-header-text">
           <strong className="brand-cn">暖窝账本</strong>
-          <span>{me?.user.display_name} · {me?.household?.name}</span>
+          <span>
+            <UserAvatar user={me?.user} size={22} className="header-avatar" /> {me?.user.display_name} · {me?.household?.name}
+          </span>
         </div>
       </header>
       <aside className="sider">
@@ -150,9 +231,9 @@ export default function App() {
         </nav>
         {me && (
           <div className="who">
-            <div>
-              <span className="dot" style={{ background: me.user.avatar_color }} />
-              {me.user.display_name} · {me.household?.name}
+            <div className="who-row">
+              <UserAvatar user={me.user} size={32} />
+              <span>{me.user.display_name} · {me.household?.name}</span>
             </div>
             <p className="muted">角色 {me.user.role === "owner" ? "家长" : "成员"}</p>
             <button className="btn ghost" style={{ marginTop: 10, width: "100%" }} onClick={logout}>
@@ -168,8 +249,8 @@ export default function App() {
         {page === "add" && <Add token={token} show={show} />}
         {page === "biz" && <Biz token={token} />}
         {page === "budget" && <Budget token={token} show={show} />}
-        {(page === "accounts" || page === "family") && (
-          <AccountMgmt token={token} me={me} show={show} onMeUpdate={setMe} />
+        {(page === "settings" || page === "accounts" || page === "family") && (
+          <SettingsPanel token={token} me={me} show={show} onMeUpdate={setMe} />
         )}
         {page === "backup" && <BackupPanel token={token} me={me} show={show} />}
         {page === "ai" && <AiPanel token={token} show={show} me={me} />}
@@ -246,7 +327,7 @@ function Login({ onLogin, show, toast }) {
 function More({ go, logout, me }) {
   const items = [
     ["budget", "预算", "给这个月画一条温柔的线"],
-    ["accounts", "账号管理", "资料、家人、资金账户与改密"],
+    ["settings", "设置", "资料头像、账本配置、家人与资金账户"],
     ["backup", "数据备份", "手动备份与定时备份设置"],
     ["ai", "微信 / AI", "语音记账 Token 与试写"],
   ];
@@ -357,8 +438,8 @@ function Home({ token, me, go }) {
           <h3>每位家人的个人开销</h3>
           {dash.members.map((m) => (
             <div className="member-pill" key={m.user_id}>
-              <span>
-                <span className="dot" style={{ background: m.avatar_color, display: "inline-block", width: 10, height: 10, borderRadius: 99, marginRight: 8 }} />
+              <span className="member-pill-name">
+                <UserAvatar user={m} size={24} />
                 {m.display_name}
               </span>
               <strong>¥ {money(m.expense)}</strong>
@@ -436,15 +517,21 @@ function Books({ token }) {
       <p className="sub">个人日常、家庭公共、经营副业。点开账本看流水。</p>
       <div className="ledger-tabs">
         {ledgers.map((l) => (
-          <button key={l.id} className={`chip ${active === l.id ? "on" : ""}`} onClick={() => setActive(l.id)}>
-            {l.icon} {l.name}
+          <button key={l.id} className={`chip ledger-chip ${active === l.id ? "on" : ""}`} onClick={() => setActive(l.id)}>
+            <LedgerThumb ledger={l} size={28} />
+            {l.name}
           </button>
         ))}
       </div>
       {current && (
-        <p className="muted">
-          {current.type === "business" ? "这笔不进入家庭消费饼图。" : "会计入家庭总览。"}
-        </p>
+        <>
+          {current.cover_url && (
+            <div className="ledger-cover-banner" style={{ backgroundImage: `url(${current.cover_url})` }} />
+          )}
+          <p className="muted">
+            {current.description || (current.type === "business" ? "这笔不进入家庭消费饼图。" : "会计入家庭总览。")}
+          </p>
+        </>
       )}
       <div className="card books-list">
         {rows.map((t) => (
@@ -532,15 +619,21 @@ function Add({ token, show }) {
             required
           />
         </label>
-        <label>
+        <label style={{ gridColumn: "1 / -1" }}>
           账本
-          <select value={form.ledger_id} onChange={(e) => setForm({ ...form, ledger_id: e.target.value, category_id: "" })}>
+          <div className="ledger-pick">
             {ledgers.map((l) => (
-              <option key={l.id} value={l.id}>
-                {l.icon} {l.name}
-              </option>
+              <button
+                type="button"
+                key={l.id}
+                className={`chip ledger-chip ${String(form.ledger_id) === String(l.id) ? "on" : ""}`}
+                onClick={() => setForm({ ...form, ledger_id: l.id, category_id: "" })}
+              >
+                <LedgerThumb ledger={l} size={28} />
+                {l.name}
+              </button>
             ))}
-          </select>
+          </div>
         </label>
         <label>
           账户
@@ -670,7 +763,14 @@ const ACCOUNT_KINDS = [
 ];
 const ROLE_LABEL = { owner: "家长", member: "成员", viewer: "只读" };
 
-function AccountMgmt({ token, me, show, onMeUpdate }) {
+const LEDGER_TYPES = [
+  ["personal", "个人账本"],
+  ["family", "家庭公共"],
+  ["business", "经营副业"],
+];
+const LEDGER_ICONS = ["📒", "🏠", "👤", "💼", "🎨", "🍜", "🚗", "🎁", "💰", "🐾", "📚", "🌿"];
+
+function SettingsPanel({ token, me, show, onMeUpdate }) {
   const [tab, setTab] = useState("profile");
   const [profile, setProfile] = useState({
     display_name: "",
@@ -690,6 +790,17 @@ function AccountMgmt({ token, me, show, onMeUpdate }) {
   const [walletForm, setWalletForm] = useState({ name: "", kind: "cash", opening_balance: "0" });
   const [editMember, setEditMember] = useState(null);
   const [resetPwd, setResetPwd] = useState({ id: null, password: "" });
+  const [ledgers, setLedgers] = useState([]);
+  const [ledgerForm, setLedgerForm] = useState({
+    name: "",
+    type: "personal",
+    icon: "📒",
+    description: "",
+    include_in_family: true,
+    owner_user_id: "",
+  });
+  const [editLedger, setEditLedger] = useState(null);
+  const [avatarBusy, setAvatarBusy] = useState(false);
 
   useEffect(() => {
     if (me?.user) {
@@ -707,10 +818,110 @@ function AccountMgmt({ token, me, show, onMeUpdate }) {
   function loadWallets() {
     api("/api/v1/accounts", { token }).then(setWallets);
   }
+  function loadLedgers() {
+    api("/api/v1/ledgers", { token }).then(setLedgers);
+  }
   useEffect(() => {
     loadMembers();
     loadWallets();
+    loadLedgers();
   }, [token]);
+  async function uploadAvatar(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setAvatarBusy(true);
+    try {
+      const updated = await apiUpload("/api/v1/me/avatar", token, file);
+      onMeUpdate((prev) => ({ ...prev, user: { ...prev.user, ...updated } }));
+      show("头像已更新");
+    } catch (err) {
+      show(err.message);
+    } finally {
+      setAvatarBusy(false);
+      e.target.value = "";
+    }
+  }
+
+  async function addLedger(e) {
+    e.preventDefault();
+    try {
+      const body = {
+        name: ledgerForm.name,
+        type: ledgerForm.type,
+        icon: ledgerForm.icon,
+        description: ledgerForm.description,
+        include_in_family: ledgerForm.type === "business" ? false : ledgerForm.include_in_family,
+      };
+      if (ledgerForm.type === "personal" && isOwner && ledgerForm.owner_user_id) {
+        body.owner_user_id = Number(ledgerForm.owner_user_id);
+      }
+      await api("/api/v1/ledgers", { token, method: "POST", body });
+      show("账本已创建");
+      setLedgerForm({
+        name: "",
+        type: "personal",
+        icon: "📒",
+        description: "",
+        include_in_family: true,
+        owner_user_id: "",
+      });
+      loadLedgers();
+    } catch (err) {
+      show(err.message);
+    }
+  }
+
+  async function saveLedgerEdit(e) {
+    e.preventDefault();
+    try {
+      const updated = await api(`/api/v1/ledgers/${editLedger.id}`, {
+        token,
+        method: "PATCH",
+        body: {
+          name: editLedger.name,
+          icon: editLedger.icon,
+          description: editLedger.description,
+          include_in_family: editLedger.include_in_family,
+          owner_user_id:
+            editLedger.type === "personal" && isOwner && editLedger.owner_user_id
+              ? Number(editLedger.owner_user_id)
+              : undefined,
+        },
+      });
+      setEditLedger({ ...editLedger, ...updated });
+      show("账本已保存");
+      loadLedgers();
+    } catch (err) {
+      show(err.message);
+    }
+  }
+
+  async function uploadLedgerCover(e) {
+    const file = e.target.files?.[0];
+    if (!file || !editLedger) return;
+    try {
+      const updated = await apiUpload(`/api/v1/ledgers/${editLedger.id}/cover`, token, file);
+      setEditLedger({ ...editLedger, ...updated });
+      show("封面已更新");
+      loadLedgers();
+    } catch (err) {
+      show(err.message);
+    } finally {
+      e.target.value = "";
+    }
+  }
+
+  async function removeLedger(id) {
+    if (!window.confirm("确定删除这个账本？已有流水的账本无法删除。")) return;
+    try {
+      await api(`/api/v1/ledgers/${id}`, { token, method: "DELETE" });
+      show("账本已删除");
+      loadLedgers();
+      if (editLedger?.id === id) setEditLedger(null);
+    } catch (err) {
+      show(err.message);
+    }
+  }
 
   async function saveProfile(e) {
     e.preventDefault();
@@ -833,11 +1044,12 @@ function AccountMgmt({ token, me, show, onMeUpdate }) {
 
   return (
     <div className="accounts-page">
-      <h2 className="hello">账号管理</h2>
-      <p className="sub">登录资料、家庭成员与微信别名、记帐用的资金账户都在这里。</p>
+      <h2 className="hello">设置</h2>
+      <p className="sub">个人资料与头像、账本配置、家庭成员与资金账户都在这里。</p>
       <div className="seg-tabs">
         {[
           ["profile", "我的资料"],
+          ["ledgers", "账本配置"],
           ["members", "家庭成员"],
           ["wallets", "资金账户"],
         ].map(([id, label]) => (
@@ -851,6 +1063,16 @@ function AccountMgmt({ token, me, show, onMeUpdate }) {
         <>
           <form className="card form-grid" onSubmit={saveProfile}>
             <h3 style={{ gridColumn: "1 / -1" }}>个人资料</h3>
+            <div className="avatar-upload" style={{ gridColumn: "1 / -1" }}>
+              <UserAvatar user={me?.user} size={72} />
+              <div>
+                <p className="muted">上传头像（JPG/PNG，最大 2MB）</p>
+                <label className="btn ghost btn-sm avatar-btn">
+                  {avatarBusy ? "上传中…" : "更换头像"}
+                  <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" hidden onChange={uploadAvatar} />
+                </label>
+              </div>
+            </div>
             <label>
               登录名
               <input value={me?.user.username || ""} disabled />
@@ -931,13 +1153,133 @@ function AccountMgmt({ token, me, show, onMeUpdate }) {
         </>
       )}
 
+      {tab === "ledgers" && (
+        <>
+          <div className="card">
+            {ledgers.map((l) => (
+              <div className="member-row ledger-row" key={l.id}>
+                <div className="member-main">
+                  <LedgerThumb ledger={l} size={48} />
+                  <div>
+                    <strong>{l.name}</strong>
+                    <div className="muted">
+                      {LEDGER_TYPES.find(([t]) => t === l.type)?.[1] || l.type}
+                      {l.include_in_family ? " · 计入家庭总览" : " · 不计入家庭总览"}
+                    </div>
+                    {l.description && <div className="muted">{l.description}</div>}
+                  </div>
+                </div>
+                <div className="member-actions">
+                  {canEditLedger(me, l) && (
+                    <button type="button" className="btn ghost btn-sm" onClick={() => setEditLedger({ ...l })}>
+                      编辑
+                    </button>
+                  )}
+                  {isOwner && (
+                    <button type="button" className="btn ghost btn-sm" onClick={() => removeLedger(l.id)}>
+                      删除
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+            {ledgers.length === 0 && <p className="muted">还没有账本，在下方添加一本。</p>}
+          </div>
+          {me?.user.role !== "viewer" && (
+            <form className="card form-grid" onSubmit={addLedger} style={{ marginTop: 16 }}>
+              <h3 style={{ gridColumn: "1 / -1" }}>新增账本</h3>
+              <label>
+                名称
+                <input
+                  value={ledgerForm.name}
+                  onChange={(e) => setLedgerForm({ ...ledgerForm, name: e.target.value })}
+                  placeholder="小林私房 / 周末摆摊"
+                  required
+                />
+              </label>
+              <label>
+                类型
+                <select
+                  value={ledgerForm.type}
+                  onChange={(e) =>
+                    setLedgerForm({
+                      ...ledgerForm,
+                      type: e.target.value,
+                      include_in_family: e.target.value !== "business",
+                    })
+                  }
+                >
+                  {LEDGER_TYPES.map(([t, label]) => (
+                    <option key={t} value={t} disabled={!isOwner && t !== "personal"}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {ledgerForm.type === "personal" && isOwner && (
+                <label style={{ gridColumn: "1 / -1" }}>
+                  归属成员
+                  <select
+                    value={ledgerForm.owner_user_id || me?.user.id}
+                    onChange={(e) => setLedgerForm({ ...ledgerForm, owner_user_id: e.target.value })}
+                  >
+                    {members.map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.display_name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
+              <label style={{ gridColumn: "1 / -1" }}>
+                简介
+                <input
+                  value={ledgerForm.description}
+                  onChange={(e) => setLedgerForm({ ...ledgerForm, description: e.target.value })}
+                  placeholder="可选，账本页会显示"
+                />
+              </label>
+              {ledgerForm.type !== "business" && (
+                <label style={{ gridColumn: "1 / -1", flexDirection: "row", alignItems: "center", gap: 10 }}>
+                  <input
+                    type="checkbox"
+                    checked={ledgerForm.include_in_family}
+                    onChange={(e) => setLedgerForm({ ...ledgerForm, include_in_family: e.target.checked })}
+                    style={{ width: 20, height: 20, minHeight: 20 }}
+                  />
+                  计入家庭总览与饼图
+                </label>
+              )}
+              <div style={{ gridColumn: "1 / -1" }}>
+                <span className="cat-label">图标</span>
+                <div className="chips">
+                  {LEDGER_ICONS.map((ic) => (
+                    <button
+                      type="button"
+                      key={ic}
+                      className={`chip ${ledgerForm.icon === ic ? "on" : ""}`}
+                      onClick={() => setLedgerForm({ ...ledgerForm, icon: ic })}
+                    >
+                      {ic}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <button className="btn" style={{ gridColumn: "1 / -1" }}>
+                创建账本
+              </button>
+            </form>
+          )}
+        </>
+      )}
+
       {tab === "members" && (
         <>
           <div className="card">
             {members.map((m) => (
               <div className="member-row" key={m.id}>
                 <div className="member-main">
-                  <span className="dot" style={{ background: m.avatar_color }} />
+                  <UserAvatar user={m} size={40} />
                   <div>
                     <strong>{m.display_name}</strong>
                     <div className="muted">@{m.username} · {ROLE_LABEL[m.role] || m.role}</div>
@@ -1082,6 +1424,80 @@ function AccountMgmt({ token, me, show, onMeUpdate }) {
             </form>
           )}
         </>
+      )}
+
+      {editLedger && (
+        <div className="modal-backdrop" onClick={() => setEditLedger(null)}>
+          <form className="card modal" onSubmit={saveLedgerEdit} onClick={(e) => e.stopPropagation()}>
+            <h3>编辑账本 · {editLedger.name}</h3>
+            <div className="ledger-edit-cover">
+              <LedgerThumb ledger={editLedger} size={72} />
+              <label className="btn ghost btn-sm">
+                上传封面
+                <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" hidden onChange={uploadLedgerCover} />
+              </label>
+            </div>
+            <label>
+              名称
+              <input
+                value={editLedger.name}
+                onChange={(e) => setEditLedger({ ...editLedger, name: e.target.value })}
+                required
+              />
+            </label>
+            <label>
+              简介
+              <input
+                value={editLedger.description || ""}
+                onChange={(e) => setEditLedger({ ...editLedger, description: e.target.value })}
+              />
+            </label>
+            {editLedger.type === "personal" && isOwner && (
+              <label>
+                归属成员
+                <select
+                  value={editLedger.owner_user_id || ""}
+                  onChange={(e) => setEditLedger({ ...editLedger, owner_user_id: Number(e.target.value) })}
+                >
+                  {members.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.display_name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+            {editLedger.type !== "business" && (
+              <label style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                <input
+                  type="checkbox"
+                  checked={editLedger.include_in_family}
+                  onChange={(e) => setEditLedger({ ...editLedger, include_in_family: e.target.checked })}
+                  style={{ width: 20, height: 20, minHeight: 20 }}
+                />
+                计入家庭总览
+              </label>
+            )}
+            <div className="chips" style={{ marginTop: 8 }}>
+              {LEDGER_ICONS.map((ic) => (
+                <button
+                  type="button"
+                  key={ic}
+                  className={`chip ${editLedger.icon === ic ? "on" : ""}`}
+                  onClick={() => setEditLedger({ ...editLedger, icon: ic })}
+                >
+                  {ic}
+                </button>
+              ))}
+            </div>
+            <div className="modal-actions">
+              <button type="button" className="btn ghost" onClick={() => setEditLedger(null)}>
+                取消
+              </button>
+              <button className="btn">保存</button>
+            </div>
+          </form>
+        </div>
       )}
 
       {editMember && (

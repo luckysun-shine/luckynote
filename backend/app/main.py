@@ -5,7 +5,7 @@ import secrets
 from datetime import datetime
 from typing import Annotated, Optional
 
-from fastapi import Depends, FastAPI, Header, HTTPException
+from fastapi import Depends, FastAPI, File, Header, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -40,6 +40,8 @@ from .backup import (
     restore_backup,
     save_config,
 )
+from .migrate import ensure_schema, ensure_upload_dirs, media_url
+from .uploads import delete_media, media_file_path, save_ledger_cover, save_user_avatar
 from .scheduler import refresh_backup_schedule, start_backup_scheduler, stop_backup_scheduler
 from .parser import parse_bookkeeping
 from .seed import match_category, seed_if_empty
@@ -57,6 +59,8 @@ app.add_middleware(
 @app.on_event("startup")
 def startup():
     Base.metadata.create_all(bind=engine)
+    ensure_schema()
+    ensure_upload_dirs()
     db = next(get_db())
     try:
         seed_if_empty(db)
@@ -174,6 +178,23 @@ class BackupConfigIn(BaseModel):
     keep_count: int = Field(default=7, ge=1, le=365)
 
 
+class LedgerIn(BaseModel):
+    name: str = Field(min_length=1, max_length=80)
+    type: str = "personal"
+    icon: str = "📒"
+    description: str = ""
+    include_in_family: bool = True
+    owner_user_id: Optional[int] = None
+
+
+class LedgerPatch(BaseModel):
+    name: Optional[str] = None
+    icon: Optional[str] = None
+    description: Optional[str] = None
+    include_in_family: Optional[bool] = None
+    owner_user_id: Optional[int] = None
+
+
 class BudgetIn(BaseModel):
     year: int
     month: int
@@ -207,9 +228,34 @@ def user_out(u: User) -> dict:
         "display_name": u.display_name,
         "role": u.role,
         "avatar_color": u.avatar_color,
+        "avatar_url": media_url(getattr(u, "avatar_path", "") or ""),
         "wechat_alias": u.wechat_alias,
         "household_id": u.household_id,
     }
+
+
+def ledger_out(r: Ledger, user: User | None = None) -> dict:
+    return {
+        "id": r.id,
+        "name": r.name,
+        "type": r.type,
+        "icon": r.icon,
+        "description": getattr(r, "description", "") or "",
+        "cover_url": media_url(getattr(r, "cover_path", "") or ""),
+        "owner_user_id": r.owner_user_id,
+        "include_in_family": r.include_in_family,
+        "visible": can_see_ledger(user, r) if user else True,
+    }
+
+
+def can_edit_ledger(user: User, ledger: Ledger) -> bool:
+    if user.role == "viewer":
+        return False
+    if user.role == "owner":
+        return True
+    if ledger.type == "personal" and ledger.owner_user_id == user.id:
+        return True
+    return ledger.type in ("family", "business") and user.role == "member"
 
 
 def tx_out(tx: Transaction, db: Session) -> dict:
@@ -288,6 +334,32 @@ def patch_me(body: MePatch, user: User = Depends(current_user), db: Session = De
     db.commit()
     db.refresh(user)
     return user_out(user)
+
+
+@app.post("/api/v1/me/avatar")
+async def upload_my_avatar(
+    file: UploadFile = File(...),
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    delete_media(user.avatar_path)
+    user.avatar_path = await save_user_avatar(file, user.id)
+    db.commit()
+    db.refresh(user)
+    return user_out(user)
+
+
+@app.get("/api/v1/media/{category}/{filename}")
+def get_media(category: str, filename: str):
+    if category not in ("avatars", "ledger-covers"):
+        raise HTTPException(404, "不存在")
+    try:
+        path = media_file_path(f"{category}/{filename}")
+    except ValueError:
+        raise HTTPException(404, "不存在")
+    if not path.exists():
+        raise HTTPException(404, "不存在")
+    return FileResponse(path)
 
 
 @app.post("/api/v1/me/password")
@@ -394,21 +466,102 @@ def reset_member_password(
 
 
 @app.get("/api/v1/ledgers")
-def ledgers(user: User = Depends(current_user), db: Session = Depends(get_db)):
+def list_ledgers(user: User = Depends(current_user), db: Session = Depends(get_db)):
     rows = db.query(Ledger).filter(Ledger.household_id == user.household_id).all()
-    return [
-        {
-            "id": r.id,
-            "name": r.name,
-            "type": r.type,
-            "icon": r.icon,
-            "owner_user_id": r.owner_user_id,
-            "include_in_family": r.include_in_family,
-            "visible": can_see_ledger(user, r),
-        }
-        for r in rows
-        if can_see_ledger(user, r)
-    ]
+    return [ledger_out(r, user) for r in rows if can_see_ledger(user, r)]
+
+
+@app.post("/api/v1/ledgers")
+def create_ledger(body: LedgerIn, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    if not can_write(user):
+        raise HTTPException(403, "只读成员不能创建账本")
+    if body.type not in ("personal", "family", "business"):
+        raise HTTPException(400, "账本类型无效")
+    owner_id = body.owner_user_id
+    if body.type == "personal":
+        owner_id = owner_id or user.id
+        if user.role != "owner" and owner_id != user.id:
+            raise HTTPException(403, "只能为自己创建个人账本")
+    else:
+        owner_id = owner_id if body.type == "business" else None
+    include = body.include_in_family
+    if body.type == "business":
+        include = False
+    row = Ledger(
+        household_id=user.household_id,
+        owner_user_id=owner_id,
+        type=body.type,
+        name=body.name.strip(),
+        icon=body.icon[:32] if body.icon else "📒",
+        description=body.description[:200],
+        include_in_family=include,
+    )
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    return ledger_out(row, user)
+
+
+@app.patch("/api/v1/ledgers/{ledger_id}")
+def patch_ledger(
+    ledger_id: int,
+    body: LedgerPatch,
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    row = db.get(Ledger, ledger_id)
+    if not row or row.household_id != user.household_id:
+        raise HTTPException(404, "账本不存在")
+    if not can_edit_ledger(user, row):
+        raise HTTPException(403, "无权编辑该账本")
+    if body.name is not None:
+        row.name = body.name.strip()
+    if body.icon is not None:
+        row.icon = body.icon[:32]
+    if body.description is not None:
+        row.description = body.description[:200]
+    if body.include_in_family is not None and row.type != "business":
+        row.include_in_family = body.include_in_family
+    if body.owner_user_id is not None and row.type == "personal" and user.role == "owner":
+        row.owner_user_id = body.owner_user_id
+    db.commit()
+    db.refresh(row)
+    return ledger_out(row, user)
+
+
+@app.post("/api/v1/ledgers/{ledger_id}/cover")
+async def upload_ledger_cover(
+    ledger_id: int,
+    file: UploadFile = File(...),
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    row = db.get(Ledger, ledger_id)
+    if not row or row.household_id != user.household_id:
+        raise HTTPException(404, "账本不存在")
+    if not can_edit_ledger(user, row):
+        raise HTTPException(403, "无权编辑该账本")
+    delete_media(row.cover_path)
+    row.cover_path = await save_ledger_cover(file, ledger_id)
+    db.commit()
+    db.refresh(row)
+    return ledger_out(row, user)
+
+
+@app.delete("/api/v1/ledgers/{ledger_id}")
+def remove_ledger(ledger_id: int, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    if user.role != "owner":
+        raise HTTPException(403, "仅家长可删除账本")
+    row = db.get(Ledger, ledger_id)
+    if not row or row.household_id != user.household_id:
+        raise HTTPException(404, "账本不存在")
+    used = db.query(Transaction).filter(Transaction.ledger_id == ledger_id).first()
+    if used:
+        raise HTTPException(400, "账本已有流水，无法删除")
+    delete_media(row.cover_path)
+    db.delete(row)
+    db.commit()
+    return {"ok": True}
 
 
 @app.get("/api/v1/accounts")
@@ -674,6 +827,7 @@ def dashboard(
                 "user_id": m.id,
                 "display_name": m.display_name,
                 "avatar_color": m.avatar_color,
+                "avatar_url": media_url(getattr(m, "avatar_path", "") or ""),
                 "expense": _sum(db, hid, lids, start, end, "expense"),
                 "income": _sum(db, hid, lids, start, end, "income"),
             }

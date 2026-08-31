@@ -73,3 +73,68 @@ def test_login_and_family_dashboard():
         lst = client.get("/api/v1/backups", headers={"Authorization": f"Bearer {token}"})
         assert lst.status_code == 200
         assert len(lst.json()["items"]) >= 1
+
+
+def test_ledgers_and_avatar_upload():
+    from io import BytesIO
+
+    with TestClient(app) as client:
+        res = client.post("/api/v1/auth/login", json={"username": "lin", "password": "luckynote2"})
+        token = res.json()["token"]
+        headers = {"Authorization": f"Bearer {token}"}
+
+        ledgers = client.get("/api/v1/ledgers", headers=headers)
+        assert ledgers.status_code == 200
+        before = len(ledgers.json())
+
+        created = client.post(
+            "/api/v1/ledgers",
+            headers=headers,
+            json={
+                "name": "测试账本",
+                "type": "personal",
+                "icon": "🎁",
+                "description": "单元测试",
+                "include_in_family": False,
+            },
+        )
+        assert created.status_code == 200
+        lid = created.json()["id"]
+        assert created.json()["description"] == "单元测试"
+
+        patched = client.patch(
+            f"/api/v1/ledgers/{lid}",
+            headers=headers,
+            json={"name": "测试账本改", "description": "已改"},
+        )
+        assert patched.status_code == 200
+        assert patched.json()["name"] == "测试账本改"
+
+        png = BytesIO(
+            b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x02\x00\x00\x00\x90wS\xde"
+            b"\x00\x00\x00\x0cIDATx\x9cc\x00\x01\x00\x00\x05\x00\x01\r\n-\xdb\x00\x00\x00\x00IEND\xaeB`\x82"
+        )
+        cover = client.post(
+            f"/api/v1/ledgers/{lid}/cover",
+            headers=headers,
+            files={"file": ("cover.png", png, "image/png")},
+        )
+        assert cover.status_code == 200
+        assert cover.json()["cover_url"]
+
+        avatar = client.post(
+            "/api/v1/me/avatar",
+            headers=headers,
+            files={"file": ("avatar.png", png, "image/png")},
+        )
+        assert avatar.status_code == 200
+        assert avatar.json()["avatar_url"]
+
+        media = client.get(avatar.json()["avatar_url"])
+        assert media.status_code == 200
+
+        deleted = client.delete(f"/api/v1/ledgers/{lid}", headers=headers)
+        assert deleted.status_code == 200
+
+        after = client.get("/api/v1/ledgers", headers=headers)
+        assert len(after.json()) == before

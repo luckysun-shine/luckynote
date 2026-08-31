@@ -61,6 +61,7 @@ class User(Base):
     display_name: Mapped[str] = mapped_column(String(40))
     role: Mapped[str] = mapped_column(String(16), default=Role.member.value)
     avatar_color: Mapped[str] = mapped_column(String(16), default="#E07A5F")
+    avatar_path: Mapped[str] = mapped_column(String(255), default="")
     wechat_alias: Mapped[str] = mapped_column(String(80), default="")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
@@ -76,7 +77,9 @@ class Ledger(Base):
     type: Mapped[str] = mapped_column(String(16))
     name: Mapped[str] = mapped_column(String(80))
     include_in_family: Mapped[bool] = mapped_column(Boolean, default=True)
-    icon: Mapped[str] = mapped_column(String(8), default="📒")
+    icon: Mapped[str] = mapped_column(String(32), default="📒")
+    cover_path: Mapped[str] = mapped_column(String(255), default="")
+    description: Mapped[str] = mapped_column(String(200), default="")
 
 
 class Account(Base):
