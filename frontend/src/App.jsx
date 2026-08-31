@@ -68,6 +68,7 @@ const NAV = [
   ["biz", "经营副业"],
   ["budget", "预算"],
   ["accounts", "账号管理"],
+  ["backup", "数据备份"],
   ["ai", "微信 / AI"],
 ];
 
@@ -79,7 +80,9 @@ const TABS = [
   { id: "more", label: "更多", icon: "✦" },
 ];
 
-const MORE_PAGES = ["more", "budget", "accounts", "ai"];
+const MORE_PAGES = ["more", "budget", "accounts", "backup", "ai"];
+
+const WEEKDAYS = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"];
 
 export default function App() {
   const [token, setToken] = useState(localStorage.getItem("ln_token") || "");
@@ -168,6 +171,7 @@ export default function App() {
         {(page === "accounts" || page === "family") && (
           <AccountMgmt token={token} me={me} show={show} onMeUpdate={setMe} />
         )}
+        {page === "backup" && <BackupPanel token={token} me={me} show={show} />}
         {page === "ai" && <AiPanel token={token} show={show} me={me} />}
         {page === "more" && <More go={setPage} logout={logout} me={me} />}
         </div>
@@ -243,6 +247,7 @@ function More({ go, logout, me }) {
   const items = [
     ["budget", "预算", "给这个月画一条温柔的线"],
     ["accounts", "账号管理", "资料、家人、资金账户与改密"],
+    ["backup", "数据备份", "手动备份与定时备份设置"],
     ["ai", "微信 / AI", "语音记账 Token 与试写"],
   ];
   return (
@@ -1155,6 +1160,219 @@ function AccountMgmt({ token, me, show, onMeUpdate }) {
           </form>
         </div>
       )}
+    </div>
+  );
+}
+
+async function downloadFile(path, token, filename) {
+  const res = await fetch(path, { headers: { Authorization: `Bearer ${token}` } });
+  if (!res.ok) throw new Error("下载失败");
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function BackupPanel({ token, me, show }) {
+  const [items, setItems] = useState([]);
+  const [cfg, setCfg] = useState({
+    enabled: false,
+    frequency: "daily",
+    hour: 3,
+    minute: 0,
+    weekday: 0,
+    keep_count: 7,
+  });
+  const [busy, setBusy] = useState(false);
+
+  function load() {
+    api("/api/v1/backups", { token }).then((data) => {
+      setItems(data.items || []);
+      if (data.config) setCfg((c) => ({ ...c, ...data.config }));
+    });
+  }
+  useEffect(load, [token]);
+
+  if (me?.user.role !== "owner") {
+    return (
+      <>
+        <h2 className="hello">数据备份</h2>
+        <p className="muted">仅家长可管理备份与恢复。</p>
+      </>
+    );
+  }
+
+  async function saveConfig(e) {
+    e.preventDefault();
+    setBusy(true);
+    try {
+      const saved = await api("/api/v1/backup-config", { token, method: "PUT", body: cfg });
+      setCfg(saved);
+      show("定时备份设置已保存");
+    } catch (err) {
+      show(err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function backupNow() {
+    setBusy(true);
+    try {
+      await api("/api/v1/backups", { token, method: "POST" });
+      show("备份已完成");
+      load();
+    } catch (err) {
+      show(err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function remove(name) {
+    if (!window.confirm(`删除备份 ${name}？`)) return;
+    try {
+      await api(`/api/v1/backups/${encodeURIComponent(name)}`, { token, method: "DELETE" });
+      show("已删除");
+      load();
+    } catch (err) {
+      show(err.message);
+    }
+  }
+
+  async function restore(name) {
+    if (
+      !window.confirm(
+        `确定用 ${name} 恢复数据？当前账本会被覆盖，建议先手动备份一次。恢复后建议在 NAS 上重启容器。`
+      )
+    ) {
+      return;
+    }
+    setBusy(true);
+    try {
+      const res = await api(`/api/v1/backups/${encodeURIComponent(name)}/restore`, { token, method: "POST" });
+      show(res.hint || "已恢复");
+    } catch (err) {
+      show(err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="accounts-page">
+      <h2 className="hello">数据备份</h2>
+      <p className="sub">备份保存在 NAS 数据卷 /data/backups，可下载到电脑或配合定时任务自动备份。</p>
+
+      <div className="card" style={{ marginTop: 16 }}>
+        <h3>立即备份</h3>
+        <p className="muted">打包当前账本数据库为 zip，含 luckynote.db 与说明文件。</p>
+        <button className="btn" style={{ marginTop: 12 }} disabled={busy} onClick={backupNow}>
+          立即备份
+        </button>
+      </div>
+
+      <form className="card form-grid" onSubmit={saveConfig} style={{ marginTop: 16 }}>
+        <h3 style={{ gridColumn: "1 / -1" }}>定时备份</h3>
+        <label style={{ gridColumn: "1 / -1", flexDirection: "row", alignItems: "center", gap: 10 }}>
+          <input
+            type="checkbox"
+            checked={cfg.enabled}
+            onChange={(e) => setCfg({ ...cfg, enabled: e.target.checked })}
+            style={{ width: 20, height: 20, minHeight: 20 }}
+          />
+          启用自动备份（容器运行中按下方时间执行）
+        </label>
+        <label>
+          频率
+          <select value={cfg.frequency} onChange={(e) => setCfg({ ...cfg, frequency: e.target.value })}>
+            <option value="daily">每天</option>
+            <option value="weekly">每周</option>
+          </select>
+        </label>
+        {cfg.frequency === "weekly" && (
+          <label>
+            星期
+            <select value={cfg.weekday} onChange={(e) => setCfg({ ...cfg, weekday: Number(e.target.value) })}>
+              {WEEKDAYS.map((d, i) => (
+                <option key={d} value={i}>
+                  {d}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+        <label>
+          小时 (0-23)
+          <input
+            type="number"
+            min={0}
+            max={23}
+            value={cfg.hour}
+            onChange={(e) => setCfg({ ...cfg, hour: Number(e.target.value) })}
+          />
+        </label>
+        <label>
+          分钟
+          <input
+            type="number"
+            min={0}
+            max={59}
+            value={cfg.minute}
+            onChange={(e) => setCfg({ ...cfg, minute: Number(e.target.value) })}
+          />
+        </label>
+        <label style={{ gridColumn: "1 / -1" }}>
+          保留份数（超出自动删最旧）
+          <input
+            type="number"
+            min={1}
+            max={365}
+            value={cfg.keep_count}
+            onChange={(e) => setCfg({ ...cfg, keep_count: Number(e.target.value) })}
+          />
+        </label>
+        <button className="btn sage" style={{ gridColumn: "1 / -1" }} disabled={busy}>
+          保存定时设置
+        </button>
+      </form>
+
+      <div className="card" style={{ marginTop: 16 }}>
+        <h3>备份列表</h3>
+        {items.length === 0 && <p className="muted">还没有备份，点「立即备份」创建第一份。</p>}
+        {items.map((b) => (
+          <div className="member-row" key={b.filename}>
+            <div>
+              <strong>{b.filename}</strong>
+              <div className="muted">
+                {b.created_at.slice(0, 19).replace("T", " ")} · {b.size_human}
+              </div>
+            </div>
+            <div className="member-actions">
+              <button
+                type="button"
+                className="btn ghost btn-sm"
+                onClick={() =>
+                  downloadFile(`/api/v1/backups/${encodeURIComponent(b.filename)}/download`, token, b.filename).catch(
+                    (e) => show(e.message)
+                  )
+                }
+              >
+                下载
+              </button>
+              <button type="button" className="btn ghost btn-sm" onClick={() => restore(b.filename)}>
+                恢复
+              </button>
+              <button type="button" className="btn ghost btn-sm" onClick={() => remove(b.filename)}>
+                删除
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

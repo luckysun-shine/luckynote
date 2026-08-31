@@ -58,3 +58,18 @@ def test_login_and_family_dashboard():
         acc_id = acc.json()["id"]
 
         client.delete(f"/api/v1/accounts/{acc_id}", headers={"Authorization": f"Bearer {token}"})
+
+        bk = client.post("/api/v1/backups", headers={"Authorization": f"Bearer {token}"})
+        assert bk.status_code == 200
+        assert bk.json()["filename"].endswith(".zip")
+
+        cfg = client.put(
+            "/api/v1/backup-config",
+            headers={"Authorization": f"Bearer {token}"},
+            json={"enabled": True, "frequency": "daily", "hour": 4, "minute": 0, "keep_count": 5},
+        )
+        assert cfg.status_code == 200
+
+        lst = client.get("/api/v1/backups", headers={"Authorization": f"Bearer {token}"})
+        assert lst.status_code == 200
+        assert len(lst.json()["items"]) >= 1

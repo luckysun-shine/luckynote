@@ -49,6 +49,16 @@ cd frontend && npm install && npm run dev
 
 微信备注名需与成员资料里的「微信别名」一致。
 
+## 数据备份
+
+家长登录 → **更多 → 数据备份**（或桌面侧栏 **数据备份**）：
+
+- **立即备份**：生成 zip（含 `luckynote.db`），保存在 NAS 数据卷 `backups/` 目录
+- **定时备份**：可设每天/每周自动备份，并配置保留份数
+- **下载 / 删除 / 恢复**：恢复后建议在 NAS 执行 `docker compose restart luckynote`
+
+备份文件路径（Docker 卷内）：`/data/backups/luckynote_YYYYMMDD_HHMMSS.zip`
+
 ## 三本账
 
 - **个人**：各自收支，汇总进家庭总览。

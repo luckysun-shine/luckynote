@@ -7,6 +7,7 @@ from typing import Annotated, Optional
 
 from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from sqlalchemy import func
@@ -19,7 +20,7 @@ from .auth import (
     hash_password,
     verify_password,
 )
-from .database import Base, engine, get_db
+from .database import Base, dispose_engine, engine, get_db
 from .models import (
     Account,
     AiLog,
@@ -30,6 +31,16 @@ from .models import (
     Transaction,
     User,
 )
+from .backup import (
+    backup_path,
+    create_backup,
+    delete_backup,
+    list_backups,
+    load_config,
+    restore_backup,
+    save_config,
+)
+from .scheduler import refresh_backup_schedule, start_backup_scheduler, stop_backup_scheduler
 from .parser import parse_bookkeeping
 from .seed import match_category, seed_if_empty
 
@@ -51,6 +62,12 @@ def startup():
         seed_if_empty(db)
     finally:
         db.close()
+    start_backup_scheduler()
+
+
+@app.on_event("shutdown")
+def shutdown():
+    stop_backup_scheduler()
 
 
 def current_user(
@@ -146,6 +163,15 @@ class AccountPatch(BaseModel):
     name: Optional[str] = None
     kind: Optional[str] = None
     opening_balance: Optional[float] = None
+
+
+class BackupConfigIn(BaseModel):
+    enabled: bool
+    frequency: str = "daily"
+    hour: int = Field(default=3, ge=0, le=23)
+    minute: int = Field(default=0, ge=0, le=59)
+    weekday: int = Field(default=0, ge=0, le=6)
+    keep_count: int = Field(default=7, ge=1, le=365)
 
 
 class BudgetIn(BaseModel):
@@ -1025,6 +1051,72 @@ def ai_structured(body: StructuredTxIn, user: User = Depends(current_user), db: 
         "reply": f"已记{kind} ¥{body.amount:.2f} → {book}（{Item.note}）",
         "transaction": tx_out(tx, db),
     }
+
+
+def require_owner(user: User) -> User:
+    if user.role != "owner":
+        raise HTTPException(403, "仅家长可操作")
+    return user
+
+
+@app.get("/api/v1/backup-config")
+def get_backup_config(user: User = Depends(current_user)):
+    require_owner(user)
+    return load_config()
+
+
+@app.put("/api/v1/backup-config")
+def put_backup_config(body: BackupConfigIn, user: User = Depends(current_user)):
+    require_owner(user)
+    if body.frequency not in ("daily", "weekly"):
+        raise HTTPException(400, "frequency 只能是 daily 或 weekly")
+    cfg = save_config(body.model_dump())
+    refresh_backup_schedule()
+    return cfg
+
+
+@app.get("/api/v1/backups")
+def get_backups(user: User = Depends(current_user)):
+    require_owner(user)
+    return {"items": list_backups(), "config": load_config()}
+
+
+@app.post("/api/v1/backups")
+def post_backup(user: User = Depends(current_user)):
+    require_owner(user)
+    item = create_backup(note="manual")
+    return item
+
+
+@app.get("/api/v1/backups/{filename}/download")
+def download_backup(filename: str, user: User = Depends(current_user)):
+    require_owner(user)
+    try:
+        path = backup_path(filename)
+    except (ValueError, FileNotFoundError) as e:
+        raise HTTPException(404, str(e)) from e
+    return FileResponse(path, filename=filename, media_type="application/zip")
+
+
+@app.delete("/api/v1/backups/{filename}")
+def remove_backup(filename: str, user: User = Depends(current_user)):
+    require_owner(user)
+    try:
+        delete_backup(filename)
+    except (ValueError, FileNotFoundError) as e:
+        raise HTTPException(404, str(e)) from e
+    return {"ok": True}
+
+
+@app.post("/api/v1/backups/{filename}/restore")
+def restore_backup_api(filename: str, user: User = Depends(current_user)):
+    require_owner(user)
+    try:
+        restore_backup(filename)
+        dispose_engine()
+    except (ValueError, FileNotFoundError) as e:
+        raise HTTPException(400, str(e)) from e
+    return {"ok": True, "hint": "数据已恢复，建议执行 docker compose restart luckynote 以确保连接刷新"}
 
 
 @app.get("/api/v1/ai/logs")
