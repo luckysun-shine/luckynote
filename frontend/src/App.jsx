@@ -67,7 +67,7 @@ const NAV = [
   ["add", "记一笔"],
   ["biz", "经营副业"],
   ["budget", "预算"],
-  ["family", "家人"],
+  ["accounts", "账号管理"],
   ["ai", "微信 / AI"],
 ];
 
@@ -79,7 +79,7 @@ const TABS = [
   { id: "more", label: "更多", icon: "✦" },
 ];
 
-const MORE_PAGES = ["more", "budget", "family", "ai"];
+const MORE_PAGES = ["more", "budget", "accounts", "ai"];
 
 export default function App() {
   const [token, setToken] = useState(localStorage.getItem("ln_token") || "");
@@ -159,14 +159,18 @@ export default function App() {
         )}
       </aside>
       <main className="main">
+        <div className="page-stack">
         {page === "home" && <Home token={token} me={me} go={setPage} />}
         {page === "books" && <Books token={token} />}
         {page === "add" && <Add token={token} show={show} />}
         {page === "biz" && <Biz token={token} />}
         {page === "budget" && <Budget token={token} show={show} />}
-        {page === "family" && <Family token={token} me={me} show={show} />}
+        {(page === "accounts" || page === "family") && (
+          <AccountMgmt token={token} me={me} show={show} onMeUpdate={setMe} />
+        )}
         {page === "ai" && <AiPanel token={token} show={show} me={me} />}
         {page === "more" && <More go={setPage} logout={logout} me={me} />}
+        </div>
       </main>
       <nav className="tabbar" aria-label="手机导航">
         {TABS.map((tab) => {
@@ -238,7 +242,7 @@ function Login({ onLogin, show, toast }) {
 function More({ go, logout, me }) {
   const items = [
     ["budget", "预算", "给这个月画一条温柔的线"],
-    ["family", "家人", "邀请成员、绑定微信别名"],
+    ["accounts", "账号管理", "资料、家人、资金账户与改密"],
     ["ai", "微信 / AI", "语音记账 Token 与试写"],
   ];
   return (
@@ -391,11 +395,11 @@ function TxRow({ t }) {
       <div className="icon-bubble" style={{ background: t.category_color + "33" }}>
         {t.category_icon}
       </div>
-      <div>
-        <div>
+      <div className="tx-body">
+        <div className="tx-title">
           {t.note || t.category_name} · {t.user_name}
         </div>
-        <div className="muted">
+        <div className="muted tx-meta">
           {t.ledger_name} · {t.occurred_at.slice(0, 10)} · {t.source === "ai_wechat" ? "微信入账" : "手工"}
         </div>
       </div>
@@ -422,10 +426,10 @@ function Books({ token }) {
   }, [token, active]);
   const current = ledgers.find((l) => l.id === active);
   return (
-    <>
+    <div className="books-page">
       <h2 className="hello">三本账，三种心情</h2>
       <p className="sub">个人日常、家庭公共、经营副业。点开账本看流水。</p>
-      <div className="chips chips-scroll" style={{ margin: "16px 0" }}>
+      <div className="ledger-tabs">
         {ledgers.map((l) => (
           <button key={l.id} className={`chip ${active === l.id ? "on" : ""}`} onClick={() => setActive(l.id)}>
             {l.icon} {l.name}
@@ -437,13 +441,13 @@ function Books({ token }) {
           {current.type === "business" ? "这笔不进入家庭消费饼图。" : "会计入家庭总览。"}
         </p>
       )}
-      <div className="card" style={{ marginTop: 12 }}>
+      <div className="card books-list">
         {rows.map((t) => (
           <TxRow key={t.id} t={t} />
         ))}
         {rows.length === 0 && <p className="muted">这本账还空着，去记一笔吧。</p>}
       </div>
-    </>
+    </div>
   );
 }
 
@@ -651,63 +655,507 @@ function Budget({ token, show }) {
   );
 }
 
-function Family({ token, me, show }) {
+const AVATAR_COLORS = ["#E07A5F", "#81B29A", "#F2CC8F", "#3D405B", "#C77DFF", "#D4A373"];
+const ACCOUNT_KINDS = [
+  ["cash", "现金"],
+  ["bank", "银行卡"],
+  ["ewallet", "微信/支付宝"],
+  ["credit", "信用卡"],
+  ["business", "经营收款"],
+];
+const ROLE_LABEL = { owner: "家长", member: "成员", viewer: "只读" };
+
+function AccountMgmt({ token, me, show, onMeUpdate }) {
+  const [tab, setTab] = useState("profile");
+  const [profile, setProfile] = useState({
+    display_name: "",
+    wechat_alias: "",
+    avatar_color: "#E07A5F",
+  });
+  const [pwd, setPwd] = useState({ old_password: "", new_password: "", confirm: "" });
   const [members, setMembers] = useState([]);
-  const [form, setForm] = useState({ username: "", password: "", display_name: "", wechat_alias: "" });
-  function load() {
+  const [wallets, setWallets] = useState([]);
+  const [memberForm, setMemberForm] = useState({
+    username: "",
+    password: "",
+    display_name: "",
+    wechat_alias: "",
+    role: "member",
+  });
+  const [walletForm, setWalletForm] = useState({ name: "", kind: "cash", opening_balance: "0" });
+  const [editMember, setEditMember] = useState(null);
+  const [resetPwd, setResetPwd] = useState({ id: null, password: "" });
+
+  useEffect(() => {
+    if (me?.user) {
+      setProfile({
+        display_name: me.user.display_name,
+        wechat_alias: me.user.wechat_alias || "",
+        avatar_color: me.user.avatar_color,
+      });
+    }
+  }, [me]);
+
+  function loadMembers() {
     api("/api/v1/members", { token }).then(setMembers);
   }
-  useEffect(load, [token]);
-  async function add(e) {
+  function loadWallets() {
+    api("/api/v1/accounts", { token }).then(setWallets);
+  }
+  useEffect(() => {
+    loadMembers();
+    loadWallets();
+  }, [token]);
+
+  async function saveProfile(e) {
     e.preventDefault();
     try {
-      await api("/api/v1/members", { token, method: "POST", body: { ...form, role: "member" } });
-      show("新家人进窝了");
-      setForm({ username: "", password: "", display_name: "", wechat_alias: "" });
-      load();
+      const updated = await api("/api/v1/me", {
+        token,
+        method: "PATCH",
+        body: profile,
+      });
+      onMeUpdate((prev) => ({ ...prev, user: { ...prev.user, ...updated } }));
+      show("资料已保存");
     } catch (err) {
       show(err.message);
     }
   }
+
+  async function savePassword(e) {
+    e.preventDefault();
+    if (pwd.new_password !== pwd.confirm) {
+      show("两次新密码不一致");
+      return;
+    }
+    try {
+      await api("/api/v1/me/password", {
+        token,
+        method: "POST",
+        body: { old_password: pwd.old_password, new_password: pwd.new_password },
+      });
+      setPwd({ old_password: "", new_password: "", confirm: "" });
+      show("密码已更新");
+    } catch (err) {
+      show(err.message);
+    }
+  }
+
+  async function addMember(e) {
+    e.preventDefault();
+    try {
+      await api("/api/v1/members", { token, method: "POST", body: memberForm });
+      show("新成员已添加");
+      setMemberForm({ username: "", password: "", display_name: "", wechat_alias: "", role: "member" });
+      loadMembers();
+    } catch (err) {
+      show(err.message);
+    }
+  }
+
+  async function saveMemberEdit(e) {
+    e.preventDefault();
+    try {
+      await api(`/api/v1/members/${editMember.id}`, {
+        token,
+        method: "PATCH",
+        body: {
+          display_name: editMember.display_name,
+          wechat_alias: editMember.wechat_alias,
+          role: editMember.role,
+          avatar_color: editMember.avatar_color,
+        },
+      });
+      show("成员资料已更新");
+      setEditMember(null);
+      loadMembers();
+      if (editMember.id === me?.user.id) {
+        const fresh = await api("/api/v1/me", { token });
+        onMeUpdate(fresh);
+      }
+    } catch (err) {
+      show(err.message);
+    }
+  }
+
+  async function doResetPassword(e) {
+    e.preventDefault();
+    try {
+      await api(`/api/v1/members/${resetPwd.id}/password`, {
+        token,
+        method: "POST",
+        body: { new_password: resetPwd.password },
+      });
+      show("密码已重置");
+      setResetPwd({ id: null, password: "" });
+    } catch (err) {
+      show(err.message);
+    }
+  }
+
+  async function addWallet(e) {
+    e.preventDefault();
+    try {
+      await api("/api/v1/accounts", {
+        token,
+        method: "POST",
+        body: {
+          name: walletForm.name,
+          kind: walletForm.kind,
+          opening_balance: Number(walletForm.opening_balance) || 0,
+        },
+      });
+      show("资金账户已添加");
+      setWalletForm({ name: "", kind: "cash", opening_balance: "0" });
+      loadWallets();
+    } catch (err) {
+      show(err.message);
+    }
+  }
+
+  async function removeWallet(id) {
+    if (!window.confirm("确定删除这个资金账户？已有流水的账户无法删除。")) return;
+    try {
+      await api(`/api/v1/accounts/${id}`, { token, method: "DELETE" });
+      show("已删除");
+      loadWallets();
+    } catch (err) {
+      show(err.message);
+    }
+  }
+
+  const isOwner = me?.user.role === "owner";
+
   return (
-    <>
-      <h2 className="hello">暖窝里的人</h2>
-      <div className="card" style={{ marginTop: 16 }}>
-        {members.map((m) => (
-          <div className="member-pill" key={m.id}>
-            <span>
-              <span className="dot" style={{ background: m.avatar_color, display: "inline-block", width: 10, height: 10, borderRadius: 99, marginRight: 8 }} />
-              {m.display_name} @{m.username}
-            </span>
-            <span className="muted">微信别名：{m.wechat_alias || "未绑定"} · {m.role}</span>
-          </div>
+    <div className="accounts-page">
+      <h2 className="hello">账号管理</h2>
+      <p className="sub">登录资料、家庭成员与微信别名、记帐用的资金账户都在这里。</p>
+      <div className="seg-tabs">
+        {[
+          ["profile", "我的资料"],
+          ["members", "家庭成员"],
+          ["wallets", "资金账户"],
+        ].map(([id, label]) => (
+          <button key={id} className={`seg ${tab === id ? "on" : ""}`} onClick={() => setTab(id)}>
+            {label}
+          </button>
         ))}
       </div>
-      {me?.user.role === "owner" && (
-        <form className="card form-grid" onSubmit={add} style={{ marginTop: 16 }}>
-          <h3 style={{ gridColumn: "1 / -1" }}>邀请一位家人</h3>
-          <label>
-            登录名
-            <input value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} required />
-          </label>
-          <label>
-            初始密码
-            <input value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} required />
-          </label>
-          <label>
-            昵称
-            <input value={form.display_name} onChange={(e) => setForm({ ...form, display_name: e.target.value })} required />
-          </label>
-          <label>
-            微信备注/昵称
-            <input value={form.wechat_alias} onChange={(e) => setForm({ ...form, wechat_alias: e.target.value })} />
-          </label>
-          <button className="btn" style={{ gridColumn: "1 / -1" }}>
-            加入暖窝
-          </button>
-        </form>
+
+      {tab === "profile" && (
+        <>
+          <form className="card form-grid" onSubmit={saveProfile}>
+            <h3 style={{ gridColumn: "1 / -1" }}>个人资料</h3>
+            <label>
+              登录名
+              <input value={me?.user.username || ""} disabled />
+            </label>
+            <label>
+              角色
+              <input value={ROLE_LABEL[me?.user.role] || me?.user.role} disabled />
+            </label>
+            <label>
+              显示昵称
+              <input
+                value={profile.display_name}
+                onChange={(e) => setProfile({ ...profile, display_name: e.target.value })}
+                required
+              />
+            </label>
+            <label>
+              微信别名
+              <input
+                value={profile.wechat_alias}
+                onChange={(e) => setProfile({ ...profile, wechat_alias: e.target.value })}
+                placeholder="与微信备注一致，语音记账用"
+              />
+            </label>
+            <div style={{ gridColumn: "1 / -1" }}>
+              <span className="cat-label">头像颜色</span>
+              <div className="chips">
+                {AVATAR_COLORS.map((c) => (
+                  <button
+                    type="button"
+                    key={c}
+                    className={`color-dot ${profile.avatar_color === c ? "on" : ""}`}
+                    style={{ background: c }}
+                    onClick={() => setProfile({ ...profile, avatar_color: c })}
+                  />
+                ))}
+              </div>
+            </div>
+            <button className="btn" style={{ gridColumn: "1 / -1" }}>
+              保存资料
+            </button>
+          </form>
+          <form className="card form-grid" onSubmit={savePassword} style={{ marginTop: 16 }}>
+            <h3 style={{ gridColumn: "1 / -1" }}>修改密码</h3>
+            <label style={{ gridColumn: "1 / -1" }}>
+              当前密码
+              <input
+                type="password"
+                value={pwd.old_password}
+                onChange={(e) => setPwd({ ...pwd, old_password: e.target.value })}
+                required
+              />
+            </label>
+            <label>
+              新密码
+              <input
+                type="password"
+                value={pwd.new_password}
+                onChange={(e) => setPwd({ ...pwd, new_password: e.target.value })}
+                minLength={6}
+                required
+              />
+            </label>
+            <label>
+              确认新密码
+              <input
+                type="password"
+                value={pwd.confirm}
+                onChange={(e) => setPwd({ ...pwd, confirm: e.target.value })}
+                minLength={6}
+                required
+              />
+            </label>
+            <button className="btn ghost" style={{ gridColumn: "1 / -1" }}>
+              更新密码
+            </button>
+          </form>
+        </>
       )}
-    </>
+
+      {tab === "members" && (
+        <>
+          <div className="card">
+            {members.map((m) => (
+              <div className="member-row" key={m.id}>
+                <div className="member-main">
+                  <span className="dot" style={{ background: m.avatar_color }} />
+                  <div>
+                    <strong>{m.display_name}</strong>
+                    <div className="muted">@{m.username} · {ROLE_LABEL[m.role] || m.role}</div>
+                    <div className="muted">微信：{m.wechat_alias || "未设置"}</div>
+                  </div>
+                </div>
+                <div className="member-actions">
+                  {(isOwner || m.id === me?.user.id) && (
+                    <button type="button" className="btn ghost btn-sm" onClick={() => setEditMember({ ...m })}>
+                      编辑
+                    </button>
+                  )}
+                  {(isOwner || m.id === me?.user.id) && (
+                    <button
+                      type="button"
+                      className="btn ghost btn-sm"
+                      onClick={() => {
+                        if (m.id === me?.user.id) {
+                          setTab("profile");
+                          show("请在下方「修改密码」表单操作");
+                        } else {
+                          setResetPwd({ id: m.id, password: "" });
+                        }
+                      }}
+                    >
+                      改密
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+          {isOwner && (
+            <form className="card form-grid" onSubmit={addMember} style={{ marginTop: 16 }}>
+              <h3 style={{ gridColumn: "1 / -1" }}>添加家庭成员</h3>
+              <label>
+                登录名
+                <input
+                  value={memberForm.username}
+                  onChange={(e) => setMemberForm({ ...memberForm, username: e.target.value })}
+                  required
+                />
+              </label>
+              <label>
+                初始密码
+                <input
+                  type="password"
+                  value={memberForm.password}
+                  onChange={(e) => setMemberForm({ ...memberForm, password: e.target.value })}
+                  minLength={6}
+                  required
+                />
+              </label>
+              <label>
+                昵称
+                <input
+                  value={memberForm.display_name}
+                  onChange={(e) => setMemberForm({ ...memberForm, display_name: e.target.value })}
+                  required
+                />
+              </label>
+              <label>
+                微信别名
+                <input
+                  value={memberForm.wechat_alias}
+                  onChange={(e) => setMemberForm({ ...memberForm, wechat_alias: e.target.value })}
+                />
+              </label>
+              <label style={{ gridColumn: "1 / -1" }}>
+                角色
+                <select
+                  value={memberForm.role}
+                  onChange={(e) => setMemberForm({ ...memberForm, role: e.target.value })}
+                >
+                  <option value="member">成员</option>
+                  <option value="viewer">只读</option>
+                  <option value="owner">家长</option>
+                </select>
+              </label>
+              <button className="btn" style={{ gridColumn: "1 / -1" }}>
+                添加成员
+              </button>
+            </form>
+          )}
+        </>
+      )}
+
+      {tab === "wallets" && (
+        <>
+          <div className="card">
+            {wallets.map((w) => (
+              <div className="member-row" key={w.id}>
+                <div>
+                  <strong>{w.name}</strong>
+                  <div className="muted">
+                    {ACCOUNT_KINDS.find(([k]) => k === w.kind)?.[1] || w.kind} · 期初 ¥ {money(w.opening_balance)}
+                  </div>
+                </div>
+                {isOwner && (
+                  <button type="button" className="btn ghost btn-sm" onClick={() => removeWallet(w.id)}>
+                    删除
+                  </button>
+                )}
+              </div>
+            ))}
+            {wallets.length === 0 && <p className="muted">还没有资金账户，记帐时需要选择账户。</p>}
+          </div>
+          {me?.user.role !== "viewer" && (
+            <form className="card form-grid" onSubmit={addWallet} style={{ marginTop: 16 }}>
+              <h3 style={{ gridColumn: "1 / -1" }}>新增资金账户</h3>
+              <label>
+                名称
+                <input
+                  value={walletForm.name}
+                  onChange={(e) => setWalletForm({ ...walletForm, name: e.target.value })}
+                  placeholder="小林微信 / 家庭备用金"
+                  required
+                />
+              </label>
+              <label>
+                类型
+                <select value={walletForm.kind} onChange={(e) => setWalletForm({ ...walletForm, kind: e.target.value })}>
+                  {ACCOUNT_KINDS.map(([k, label]) => (
+                    <option key={k} value={k}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label style={{ gridColumn: "1 / -1" }}>
+                期初余额
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={walletForm.opening_balance}
+                  onChange={(e) => setWalletForm({ ...walletForm, opening_balance: e.target.value })}
+                />
+              </label>
+              <button className="btn" style={{ gridColumn: "1 / -1" }}>
+                添加账户
+              </button>
+            </form>
+          )}
+        </>
+      )}
+
+      {editMember && (
+        <div className="modal-backdrop" onClick={() => setEditMember(null)}>
+          <form className="card modal" onSubmit={saveMemberEdit} onClick={(e) => e.stopPropagation()}>
+            <h3>编辑成员 · {editMember.display_name}</h3>
+            <label>
+              昵称
+              <input
+                value={editMember.display_name}
+                onChange={(e) => setEditMember({ ...editMember, display_name: e.target.value })}
+                required
+              />
+            </label>
+            <label>
+              微信别名
+              <input
+                value={editMember.wechat_alias || ""}
+                onChange={(e) => setEditMember({ ...editMember, wechat_alias: e.target.value })}
+              />
+            </label>
+            {isOwner && editMember.id !== me?.user.id && (
+              <label>
+                角色
+                <select
+                  value={editMember.role}
+                  onChange={(e) => setEditMember({ ...editMember, role: e.target.value })}
+                >
+                  <option value="member">成员</option>
+                  <option value="viewer">只读</option>
+                  <option value="owner">家长</option>
+                </select>
+              </label>
+            )}
+            <div className="chips" style={{ marginTop: 8 }}>
+              {AVATAR_COLORS.map((c) => (
+                <button
+                  type="button"
+                  key={c}
+                  className={`color-dot ${editMember.avatar_color === c ? "on" : ""}`}
+                  style={{ background: c }}
+                  onClick={() => setEditMember({ ...editMember, avatar_color: c })}
+                />
+              ))}
+            </div>
+            <div className="modal-actions">
+              <button type="button" className="btn ghost" onClick={() => setEditMember(null)}>
+                取消
+              </button>
+              <button className="btn">保存</button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {resetPwd.id && resetPwd.id !== me?.user.id && (
+        <div className="modal-backdrop" onClick={() => setResetPwd({ id: null, password: "" })}>
+          <form className="card modal" onSubmit={doResetPassword} onClick={(e) => e.stopPropagation()}>
+            <h3>重置成员密码</h3>
+            <label>
+              新密码
+              <input
+                type="password"
+                value={resetPwd.password}
+                onChange={(e) => setResetPwd({ ...resetPwd, password: e.target.value })}
+                minLength={6}
+                required
+              />
+            </label>
+            <div className="modal-actions">
+              <button type="button" className="btn ghost" onClick={() => setResetPwd({ id: null, password: "" })}>
+                取消
+              </button>
+              <button className="btn">确认重置</button>
+            </div>
+          </form>
+        </div>
+      )}
+    </div>
   );
 }
 

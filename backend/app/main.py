@@ -116,6 +116,36 @@ class MemberPatch(BaseModel):
     display_name: Optional[str] = None
     wechat_alias: Optional[str] = None
     role: Optional[str] = None
+    avatar_color: Optional[str] = None
+
+
+class MePatch(BaseModel):
+    display_name: Optional[str] = None
+    wechat_alias: Optional[str] = None
+    avatar_color: Optional[str] = None
+
+
+class PasswordChange(BaseModel):
+    old_password: str
+    new_password: str = Field(min_length=6, max_length=64)
+
+
+class PasswordReset(BaseModel):
+    new_password: str = Field(min_length=6, max_length=64)
+
+
+class AccountIn(BaseModel):
+    name: str = Field(min_length=1, max_length=80)
+    kind: str = "cash"
+    opening_balance: float = 0
+    owner_user_id: Optional[int] = None
+    ledger_id: Optional[int] = None
+
+
+class AccountPatch(BaseModel):
+    name: Optional[str] = None
+    kind: Optional[str] = None
+    opening_balance: Optional[float] = None
 
 
 class BudgetIn(BaseModel):
@@ -221,6 +251,30 @@ def me(user: User = Depends(current_user), db: Session = Depends(get_db)):
     return {"user": user_out(user), "household": {"id": house.id, "name": house.name}}
 
 
+@app.patch("/api/v1/me")
+def patch_me(body: MePatch, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    if body.display_name is not None:
+        user.display_name = body.display_name.strip()
+    if body.wechat_alias is not None:
+        user.wechat_alias = body.wechat_alias.strip()
+    if body.avatar_color is not None:
+        user.avatar_color = body.avatar_color
+    db.commit()
+    db.refresh(user)
+    return user_out(user)
+
+
+@app.post("/api/v1/me/password")
+def change_my_password(
+    body: PasswordChange, user: User = Depends(current_user), db: Session = Depends(get_db)
+):
+    if not verify_password(body.old_password, user.password_hash):
+        raise HTTPException(400, "当前密码不正确")
+    user.password_hash = hash_password(body.new_password)
+    db.commit()
+    return {"ok": True}
+
+
 @app.get("/api/v1/members")
 def members(user: User = Depends(current_user), db: Session = Depends(get_db)):
     rows = db.query(User).filter(User.household_id == user.household_id).all()
@@ -285,9 +339,32 @@ def patch_member(
     if body.wechat_alias is not None:
         m.wechat_alias = body.wechat_alias
     if body.role is not None and user.role == "owner":
+        if m.id == user.id and body.role != "owner":
+            raise HTTPException(400, "不能取消自己的家长身份")
         m.role = body.role
+    if body.avatar_color is not None:
+        if user.role != "owner" and user.id != member_id:
+            raise HTTPException(403, "无权修改")
+        m.avatar_color = body.avatar_color
     db.commit()
     return user_out(m)
+
+
+@app.post("/api/v1/members/{member_id}/password")
+def reset_member_password(
+    member_id: int,
+    body: PasswordReset,
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    m = db.get(User, member_id)
+    if not m or m.household_id != user.household_id:
+        raise HTTPException(404, "成员不存在")
+    if user.role != "owner" and user.id != member_id:
+        raise HTTPException(403, "只有家长可重置他人密码")
+    m.password_hash = hash_password(body.new_password)
+    db.commit()
+    return {"ok": True}
 
 
 @app.get("/api/v1/ledgers")
@@ -322,6 +399,78 @@ def accounts(user: User = Depends(current_user), db: Session = Depends(get_db)):
         }
         for a in rows
     ]
+
+
+@app.post("/api/v1/accounts")
+def create_account(body: AccountIn, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    if user.role == "viewer":
+        raise HTTPException(403, "只读成员不能管理资金账户")
+    acc = Account(
+        household_id=user.household_id,
+        name=body.name.strip(),
+        kind=body.kind,
+        opening_balance=body.opening_balance,
+        owner_user_id=body.owner_user_id,
+        ledger_id=body.ledger_id,
+    )
+    db.add(acc)
+    db.commit()
+    db.refresh(acc)
+    return {
+        "id": acc.id,
+        "name": acc.name,
+        "kind": acc.kind,
+        "opening_balance": acc.opening_balance,
+        "owner_user_id": acc.owner_user_id,
+        "ledger_id": acc.ledger_id,
+    }
+
+
+@app.patch("/api/v1/accounts/{account_id}")
+def patch_account(
+    account_id: int,
+    body: AccountPatch,
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    if user.role == "viewer":
+        raise HTTPException(403, "只读")
+    acc = db.get(Account, account_id)
+    if not acc or acc.household_id != user.household_id:
+        raise HTTPException(404, "账户不存在")
+    if body.name is not None:
+        acc.name = body.name.strip()
+    if body.kind is not None:
+        acc.kind = body.kind
+    if body.opening_balance is not None:
+        acc.opening_balance = body.opening_balance
+    db.commit()
+    db.refresh(acc)
+    return {
+        "id": acc.id,
+        "name": acc.name,
+        "kind": acc.kind,
+        "opening_balance": acc.opening_balance,
+        "owner_user_id": acc.owner_user_id,
+        "ledger_id": acc.ledger_id,
+    }
+
+
+@app.delete("/api/v1/accounts/{account_id}")
+def delete_account(
+    account_id: int, user: User = Depends(current_user), db: Session = Depends(get_db)
+):
+    if user.role != "owner":
+        raise HTTPException(403, "只有家长可以删除资金账户")
+    acc = db.get(Account, account_id)
+    if not acc or acc.household_id != user.household_id:
+        raise HTTPException(404, "账户不存在")
+    used = db.query(Transaction).filter(Transaction.account_id == account_id).first()
+    if used:
+        raise HTTPException(400, "该账户已有流水，无法删除")
+    db.delete(acc)
+    db.commit()
+    return {"ok": True}
 
 
 @app.get("/api/v1/categories")

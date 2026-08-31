@@ -33,3 +33,28 @@ def test_login_and_family_dashboard():
         assert ingest.status_code == 200
         assert ingest.json()["ok"] is True
         assert ingest.json()["items"][0]["amount"] == 35
+
+        me_patch = client.patch(
+            "/api/v1/me",
+            headers={"Authorization": f"Bearer {token}"},
+            json={"display_name": "小林测试"},
+        )
+        assert me_patch.status_code == 200
+        assert me_patch.json()["display_name"] == "小林测试"
+
+        pwd = client.post(
+            "/api/v1/me/password",
+            headers={"Authorization": f"Bearer {token}"},
+            json={"old_password": "luckynote", "new_password": "luckynote2"},
+        )
+        assert pwd.status_code == 200
+
+        acc = client.post(
+            "/api/v1/accounts",
+            headers={"Authorization": f"Bearer {token}"},
+            json={"name": "测试钱包", "kind": "cash", "opening_balance": 100},
+        )
+        assert acc.status_code == 200
+        acc_id = acc.json()["id"]
+
+        client.delete(f"/api/v1/accounts/{acc_id}", headers={"Authorization": f"Bearer {token}"})
