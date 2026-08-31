@@ -845,9 +845,9 @@ function Add({ token, show }) {
     }
   }
   return (
-    <>
+    <div className="add-page">
       <h2 className="hello">轻轻记一笔</h2>
-      <form className="card form-grid add-form" onSubmit={submit} style={{ marginTop: 16 }}>
+      <form className="card form-grid add-form" onSubmit={submit}>
         <div className="chips" style={{ gridColumn: "1 / -1" }}>
           <button type="button" className={`chip ${form.type === "expense" ? "on" : ""}`} onClick={() => setForm({ ...form, type: "expense", category_id: "" })}>
             支出
@@ -879,12 +879,12 @@ function Add({ token, show }) {
                 onClick={() => setForm({ ...form, ledger_id: l.id, category_id: "" })}
               >
                 <LedgerThumb ledger={l} size={28} />
-                {l.name}
+                <span className="ledger-chip-name">{l.name}</span>
               </button>
             ))}
           </div>
         </label>
-        <label>
+        <label style={{ gridColumn: "1 / -1" }}>
           账户
           <select value={form.account_id} onChange={(e) => setForm({ ...form, account_id: e.target.value })}>
             {accounts.map((a) => (
@@ -917,7 +917,7 @@ function Add({ token, show }) {
           保存
         </button>
       </form>
-    </>
+    </div>
   );
 }
 
