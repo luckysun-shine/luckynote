@@ -177,7 +177,7 @@ OpenClaw 已完成语音转写时，Skill 把**文本或结构化 JSON**发给 L
 
 家长在「设置 → OpenClaw」生成 Token。Skill 环境变量：
 
-- `LUCKYNOTE_BASE_URL` 例如 `http://172.17.0.1:8080`（NAS 上容器互访）
+- `LUCKYNOTE_BASE_URL` 例如 `http://172.17.0.1:8907`（NAS 上容器互访）
 - `LUCKYNOTE_API_TOKEN`
 
 ### 7.3 自然语言约定（示例）
@@ -206,9 +206,9 @@ OpenClaw 已完成语音转写时，Skill 把**文本或结构化 JSON**发给 L
 
 ## 9. NAS Docker 部署要点
 
-1. 映射 `8080:8080`，数据卷 `./data:/data`。
+1. 映射 `8907:8907`，数据卷 `./data:/data`。
 2. 与 OpenClaw 同一 Docker 网络，或用 NAS 网关 IP 互访。
-3. 勿把 8080 直接暴露公网；需要时走 Tailscale / 反向代理 + 强密码。
+3. 勿把 8907 直接暴露公网；需要时走 Tailscale / 反向代理 + 强密码。
 4. 定期复制 `luckynote.db` 到另一块盘。
 
 ---

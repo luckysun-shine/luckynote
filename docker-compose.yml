@@ -4,7 +4,7 @@ services:
     container_name: luckynote
     restart: unless-stopped
     ports:
-      - "8080:8080"
+      - "8907:8907"
     environment:
       LUCKYNOTE_SECRET: ${LUCKYNOTE_SECRET:-please-change-me}
       LUCKYNOTE_DATA_DIR: /data

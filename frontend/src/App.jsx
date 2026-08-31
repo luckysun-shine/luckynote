@@ -258,7 +258,7 @@ function More({ go, logout, me }) {
         <p className="muted">
           iPhone：用 Safari 打开本页 → 底部分享 →「添加到主屏幕」。安卓 Chrome：菜单 →「添加到主屏幕」。之后像 App 一样全屏使用。
         </p>
-        <p className="muted">家里同一 Wi‑Fi 访问 http://NAS的IP:8080 即可。</p>
+        <p className="muted">家里同一 Wi‑Fi 访问 http://NAS的IP:8907 即可。</p>
       </div>
       <p className="muted" style={{ marginTop: 16 }}>
         当前：{me?.user.display_name} · {me?.user.role === "owner" ? "家长" : "成员"}

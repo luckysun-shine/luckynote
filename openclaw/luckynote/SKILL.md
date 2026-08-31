@@ -9,7 +9,7 @@ description: 把微信文字或语音转写后的记账话术写入 LuckyNote �
 
 ## 环境变量
 
-- `LUCKYNOTE_BASE_URL`：例如 `http://luckynote:8080` 或 NAS 局域网地址
+- `LUCKYNOTE_BASE_URL`：例如 `http://luckynote:8907` 或 NAS 局域网地址
 - `LUCKYNOTE_API_TOKEN`：家长在暖窝账本「微信 / AI」页生成的 Token
 
 ## 流程
