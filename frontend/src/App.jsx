@@ -144,6 +144,7 @@ const BRAND_NAME = "lucky账本";
 const NAV = [
   ["home", "总览"],
   ["books", "三本账"],
+  ["calendar", "日历"],
   ["add", "记一笔"],
   ["biz", "经营副业"],
   ["budget", "预算"],
@@ -156,11 +157,11 @@ const TABS = [
   { id: "home", label: "总览", icon: "🏡" },
   { id: "books", label: "账本", icon: "📒" },
   { id: "add", label: "记账", icon: "✎", fab: true },
-  { id: "biz", label: "经营", icon: "🎨" },
+  { id: "calendar", label: "日历", icon: "📅" },
   { id: "more", label: "更多", icon: "✦" },
 ];
 
-const MORE_PAGES = ["more", "budget", "settings", "accounts", "backup", "ai"];
+const MORE_PAGES = ["more", "budget", "settings", "accounts", "backup", "ai", "biz"];
 
 const WEEKDAYS = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"];
 
@@ -252,6 +253,7 @@ export default function App() {
         <div className="page-stack">
         {page === "home" && <Home token={token} me={me} go={setPage} />}
         {page === "books" && <Books token={token} me={me} show={show} />}
+        {page === "calendar" && <CalendarPage token={token} me={me} show={show} go={setPage} />}
         {page === "add" && <Add token={token} show={show} />}
         {page === "biz" && <Biz token={token} me={me} show={show} />}
         {page === "budget" && <Budget token={token} show={show} />}
@@ -335,6 +337,8 @@ function Login({ onLogin, show, toast }) {
 
 function More({ go, logout, me }) {
   const items = [
+    ["biz", "经营副业", "副业收支与毛利，单独一本账"],
+    ["calendar", "收支日历", "按天、按月一眼看清家底"],
     ["budget", "预算", "给这个月画一条温柔的线"],
     ["settings", "设置", "资料头像、账本配置、家人与资金账户"],
     ["backup", "数据备份", "手动备份与定时备份设置"],
@@ -343,7 +347,7 @@ function More({ go, logout, me }) {
   return (
     <>
       <h2 className="hello">更多</h2>
-      <p className="sub">预算、家人和微信入口都在这里。底部中间按钮随时记账。</p>
+      <p className="sub">预算、日历、经营和家人入口都在这里。底部中间按钮随时记账。</p>
       <div className="more-list">
         {items.map(([id, title, desc]) => (
           <button key={id} className="more-item" onClick={() => go(id)}>
@@ -366,6 +370,295 @@ function More({ go, logout, me }) {
         退出登录
       </button>
     </>
+  );
+}
+
+const CAL_WEEKDAYS = ["一", "二", "三", "四", "五", "六", "日"];
+const CAL_SCOPES = [
+  ["all", "全部"],
+  ["family", "生活账"],
+  ["business", "经营账"],
+];
+
+function pad2(n) {
+  return String(n).padStart(2, "0");
+}
+
+function daysInMonth(year, month) {
+  return new Date(year, month, 0).getDate();
+}
+
+/** 周一为一周起点时，当月 1 号前的占位格数 */
+function leadingBlanks(year, month) {
+  const dow = new Date(year, month - 1, 1).getDay(); // 0=Sun
+  return dow === 0 ? 6 : dow - 1;
+}
+
+function CalendarPage({ token, me, show, go }) {
+  const now = new Date();
+  const [mode, setMode] = useState("month"); // month | year
+  const [year, setYear] = useState(now.getFullYear());
+  const [month, setMonth] = useState(now.getMonth() + 1);
+  const [scope, setScope] = useState("all");
+  const [monthData, setMonthData] = useState(null);
+  const [yearData, setYearData] = useState(null);
+  const [selectedDay, setSelectedDay] = useState(null);
+  const [dayRows, setDayRows] = useState([]);
+
+  useEffect(() => {
+    if (mode !== "month") return;
+    api(`/api/v1/calendar/month?year=${year}&month=${month}&scope=${scope}`, { token })
+      .then((data) => {
+        setMonthData(data);
+        const inThisMonth = now.getFullYear() === year && now.getMonth() + 1 === month;
+        if (inThisMonth) {
+          setSelectedDay(now.getDate());
+          return;
+        }
+        const first = data.days?.[0]?.date;
+        setSelectedDay(first ? Number(first.slice(-2)) : 1);
+      })
+      .catch((err) => show(err.message));
+  }, [token, year, month, scope, mode]);
+
+  useEffect(() => {
+    if (mode !== "year") return;
+    api(`/api/v1/calendar/year?year=${year}&scope=${scope}`, { token })
+      .then(setYearData)
+      .catch((err) => show(err.message));
+  }, [token, year, scope, mode]);
+
+  useEffect(() => {
+    if (mode !== "month" || !selectedDay) {
+      setDayRows([]);
+      return;
+    }
+    api(
+      `/api/v1/transactions?year=${year}&month=${month}&day=${selectedDay}&limit=100`,
+      { token }
+    )
+      .then((rows) => {
+        if (scope === "family") {
+          setDayRows(rows.filter((t) => t.ledger_type !== "business"));
+        } else if (scope === "business") {
+          setDayRows(rows.filter((t) => t.ledger_type === "business"));
+        } else {
+          setDayRows(rows);
+        }
+      })
+      .catch((err) => show(err.message));
+  }, [token, year, month, selectedDay, scope, mode]);
+
+  function shiftMonth(delta) {
+    let y = year;
+    let m = month + delta;
+    if (m < 1) {
+      m = 12;
+      y -= 1;
+    } else if (m > 12) {
+      m = 1;
+      y += 1;
+    }
+    setYear(y);
+    setMonth(m);
+    setSelectedDay(null);
+  }
+
+  function shiftYear(delta) {
+    setYear((y) => y + delta);
+  }
+
+  const dayMap = Object.fromEntries((monthData?.days || []).map((d) => [d.date, d]));
+  const blanks = leadingBlanks(year, month);
+  const totalDays = daysInMonth(year, month);
+  const cells = [];
+  for (let i = 0; i < blanks; i++) cells.push(null);
+  for (let d = 1; d <= totalDays; d++) cells.push(d);
+
+  const selectedKey = selectedDay ? `${year}-${pad2(month)}-${pad2(selectedDay)}` : null;
+  const selectedCell = selectedKey ? dayMap[selectedKey] : null;
+  const isToday = (d) =>
+    d && year === now.getFullYear() && month === now.getMonth() + 1 && d === now.getDate();
+
+  return (
+    <div className="calendar-page">
+      <div className="topbar">
+        <div>
+          <h2 className="hello">收支日历</h2>
+          <p className="sub">点一天看明细，切换年视图看每月结余。</p>
+        </div>
+        <button className="btn desktop-only" type="button" onClick={() => go("add")}>
+          记一笔
+        </button>
+      </div>
+
+      <div className="seg-tabs">
+        <button className={`seg ${mode === "month" ? "on" : ""}`} onClick={() => setMode("month")}>
+          月历
+        </button>
+        <button className={`seg ${mode === "year" ? "on" : ""}`} onClick={() => setMode("year")}>
+          年览
+        </button>
+      </div>
+
+      <div className="chips cal-scope">
+        {CAL_SCOPES.map(([id, label]) => (
+          <button
+            key={id}
+            type="button"
+            className={`chip ${scope === id ? "on" : ""}`}
+            onClick={() => setScope(id)}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {mode === "month" && (
+        <>
+          <div className="cal-nav">
+            <button type="button" className="btn ghost btn-sm" onClick={() => shiftMonth(-1)}>
+              上月
+            </button>
+            <strong className="cal-title">
+              {year} 年 {month} 月
+            </strong>
+            <button type="button" className="btn ghost btn-sm" onClick={() => shiftMonth(1)}>
+              下月
+            </button>
+          </div>
+
+          {monthData && (
+            <div className="row three cal-summary">
+              <div className="card sage">
+                <div className="label">本月收入</div>
+                <div className="num">¥ {money(monthData.summary.income)}</div>
+              </div>
+              <div className="card coral">
+                <div className="label">本月支出</div>
+                <div className="num">¥ {money(monthData.summary.expense)}</div>
+              </div>
+              <div className="card butter">
+                <div className="label">本月结余</div>
+                <div className="num">¥ {money(monthData.summary.balance)}</div>
+              </div>
+            </div>
+          )}
+
+          <div className="card cal-grid-wrap">
+            <div className="cal-weekdays">
+              {CAL_WEEKDAYS.map((w) => (
+                <span key={w}>{w}</span>
+              ))}
+            </div>
+            <div className="cal-grid">
+              {cells.map((d, i) => {
+                if (!d) return <div key={`b${i}`} className="cal-cell empty" />;
+                const key = `${year}-${pad2(month)}-${pad2(d)}`;
+                const cell = dayMap[key];
+                const on = selectedDay === d;
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    className={`cal-cell ${on ? "on" : ""} ${isToday(d) ? "today" : ""} ${cell ? "has-tx" : ""}`}
+                    onClick={() => setSelectedDay(d)}
+                  >
+                    <span className="cal-day-num">{d}</span>
+                    {cell ? (
+                      <span className="cal-amounts">
+                        {cell.income > 0 && <span className="cal-in">+{money(cell.income)}</span>}
+                        {cell.expense > 0 && <span className="cal-out">-{money(cell.expense)}</span>}
+                      </span>
+                    ) : (
+                      <span className="cal-amounts muted">·</span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="card cal-day-panel">
+            <h3>
+              {selectedDay ? `${month} 月 ${selectedDay} 日` : "选择日期"}
+              {selectedCell && (
+                <span className="muted" style={{ fontWeight: 500, marginLeft: 8 }}>
+                  收 ¥{money(selectedCell.income)} · 支 ¥{money(selectedCell.expense)}
+                </span>
+              )}
+            </h3>
+            {dayRows.length === 0 && <p className="muted">这一天还没有流水。</p>}
+            {dayRows.map((t) => (
+              <TxRow key={t.id} t={t} />
+            ))}
+          </div>
+        </>
+      )}
+
+      {mode === "year" && (
+        <>
+          <div className="cal-nav">
+            <button type="button" className="btn ghost btn-sm" onClick={() => shiftYear(-1)}>
+              上一年
+            </button>
+            <strong className="cal-title">{year} 年</strong>
+            <button type="button" className="btn ghost btn-sm" onClick={() => shiftYear(1)}>
+              下一年
+            </button>
+          </div>
+
+          {yearData && (
+            <div className="row three cal-summary">
+              <div className="card sage">
+                <div className="label">全年收入</div>
+                <div className="num">¥ {money(yearData.summary.income)}</div>
+              </div>
+              <div className="card coral">
+                <div className="label">全年支出</div>
+                <div className="num">¥ {money(yearData.summary.expense)}</div>
+              </div>
+              <div className="card butter">
+                <div className="label">全年结余</div>
+                <div className="num">¥ {money(yearData.summary.balance)}</div>
+              </div>
+            </div>
+          )}
+
+          <div className="cal-year-grid">
+            {(yearData?.months || []).map((m) => {
+              const active = m.month === month && yearData.year === year;
+              const empty = m.income === 0 && m.expense === 0;
+              return (
+                <button
+                  key={m.month}
+                  type="button"
+                  className={`card cal-month-card ${active ? "on" : ""} ${empty ? "empty" : ""}`}
+                  onClick={() => {
+                    setMonth(m.month);
+                    setMode("month");
+                    setSelectedDay(null);
+                  }}
+                >
+                  <strong>{m.month} 月</strong>
+                  {empty ? (
+                    <p className="muted">暂无流水</p>
+                  ) : (
+                    <>
+                      <div className="cal-in">+{money(m.income)}</div>
+                      <div className="cal-out">-{money(m.expense)}</div>
+                      <div className={`cal-bal ${m.balance >= 0 ? "pos" : "neg"}`}>
+                        结余 ¥ {money(m.balance)}
+                      </div>
+                    </>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </>
+      )}
+    </div>
   );
 }
 

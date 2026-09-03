@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import secrets
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Annotated, Optional
 
 from fastapi import Depends, FastAPI, File, Header, HTTPException, UploadFile
@@ -706,13 +706,18 @@ def list_tx(
     user_id: Optional[int] = None,
     year: Optional[int] = None,
     month: Optional[int] = None,
+    day: Optional[int] = None,
     tx_type: Optional[str] = None,
     limit: int = 200,
     user: User = Depends(current_user),
     db: Session = Depends(get_db),
 ):
     q = db.query(Transaction).filter(Transaction.household_id == user.household_id)
-    if year and month:
+    if year and month and day:
+        start = datetime(year, month, day)
+        end = start + timedelta(days=1)
+        q = q.filter(Transaction.occurred_at >= start, Transaction.occurred_at < end)
+    elif year and month:
         start, end = month_range(year, month)
         q = q.filter(Transaction.occurred_at >= start, Transaction.occurred_at < end)
     if ledger_id:
@@ -800,6 +805,119 @@ def delete_tx(tx_id: int, user: User = Depends(current_user), db: Session = Depe
     db.delete(tx)
     db.commit()
     return {"ok": True}
+
+
+def _visible_ledger_ids(db: Session, user: User, scope: str = "all") -> list[int]:
+    rows = db.query(Ledger).filter(Ledger.household_id == user.household_id).all()
+    visible = [l for l in rows if can_see_ledger(user, l)]
+    if scope == "family":
+        return [l.id for l in visible if l.include_in_family]
+    if scope == "business":
+        return [l.id for l in visible if l.type == "business"]
+    return [l.id for l in visible]
+
+
+@app.get("/api/v1/calendar/month")
+def calendar_month(
+    year: Optional[int] = None,
+    month: Optional[int] = None,
+    scope: str = "all",
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    """按日汇总：每月格子里看收入/支出/结余。"""
+    now = datetime.now()
+    year = year or now.year
+    month = month or now.month
+    if month < 1 or month > 12:
+        raise HTTPException(400, "月份无效")
+    start, end = month_range(year, month)
+    lids = _visible_ledger_ids(db, user, scope)
+    days_map: dict[str, dict] = {}
+    if lids:
+        rows = (
+            db.query(Transaction)
+            .filter(
+                Transaction.household_id == user.household_id,
+                Transaction.ledger_id.in_(lids),
+                Transaction.occurred_at >= start,
+                Transaction.occurred_at < end,
+            )
+            .all()
+        )
+        for tx in rows:
+            key = tx.occurred_at.strftime("%Y-%m-%d")
+            cell = days_map.setdefault(
+                key, {"date": key, "income": 0.0, "expense": 0.0, "count": 0}
+            )
+            cell["count"] += 1
+            if tx.type == "income":
+                cell["income"] += float(tx.amount)
+            else:
+                cell["expense"] += float(tx.amount)
+    days = []
+    for key in sorted(days_map):
+        cell = days_map[key]
+        cell["income"] = round(cell["income"], 2)
+        cell["expense"] = round(cell["expense"], 2)
+        cell["balance"] = round(cell["income"] - cell["expense"], 2)
+        days.append(cell)
+    income = round(sum(d["income"] for d in days), 2)
+    expense = round(sum(d["expense"] for d in days), 2)
+    return {
+        "year": year,
+        "month": month,
+        "scope": scope,
+        "summary": {
+            "income": income,
+            "expense": expense,
+            "balance": round(income - expense, 2),
+            "days_with_tx": len(days),
+            "tx_count": sum(d["count"] for d in days),
+        },
+        "days": days,
+    }
+
+
+@app.get("/api/v1/calendar/year")
+def calendar_year(
+    year: Optional[int] = None,
+    scope: str = "all",
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    """按月汇总：一年里各月收支一眼看完。"""
+    now = datetime.now()
+    year = year or now.year
+    lids = _visible_ledger_ids(db, user, scope)
+    months = []
+    year_income = 0.0
+    year_expense = 0.0
+    for m in range(1, 13):
+        s, e = month_range(year, m)
+        income = _sum(db, user.household_id, lids, s, e, "income")
+        expense = _sum(db, user.household_id, lids, s, e, "expense")
+        year_income += income
+        year_expense += expense
+        months.append(
+            {
+                "year": year,
+                "month": m,
+                "income": round(income, 2),
+                "expense": round(expense, 2),
+                "balance": round(income - expense, 2),
+            }
+        )
+    return {
+        "year": year,
+        "scope": scope,
+        "summary": {
+            "income": round(year_income, 2),
+            "expense": round(year_expense, 2),
+            "balance": round(year_income - year_expense, 2),
+        },
+        "months": months,
+    }
 
 
 def _sum(db: Session, hid: int, ledger_ids: list[int], start: datetime, end: datetime, tx_type: str):

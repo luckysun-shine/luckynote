@@ -159,9 +159,10 @@ def test_transaction_patch_and_delete():
         token = res.json()["token"]
         headers = {"Authorization": f"Bearer {token}"}
 
-        txs = client.get("/api/v1/transactions?limit=1", headers=headers)
+        txs = client.get("/api/v1/transactions?limit=50", headers=headers)
         assert txs.status_code == 200
-        tx = txs.json()[0]
+        me = client.get("/api/v1/me", headers=headers).json()["user"]
+        tx = next(t for t in txs.json() if t["user_id"] == me["id"])
         tx_id = tx["id"]
 
         patched = client.patch(
@@ -207,3 +208,35 @@ def test_transaction_patch_and_delete():
             json={"note": "越权"},
         )
         assert forbidden.status_code == 403
+
+
+def test_calendar_month_and_year():
+    with TestClient(app) as client:
+        res = client.post("/api/v1/auth/login", json={"username": "lin", "password": "luckynote"})
+        if res.status_code != 200:
+            res = client.post("/api/v1/auth/login", json={"username": "lin", "password": "luckynote2"})
+        headers = {"Authorization": f"Bearer {res.json()['token']}"}
+        now = __import__("datetime").datetime.now()
+        month = client.get(
+            f"/api/v1/calendar/month?year={now.year}&month={now.month}",
+            headers=headers,
+        )
+        assert month.status_code == 200
+        body = month.json()
+        assert body["year"] == now.year
+        assert body["month"] == now.month
+        assert "summary" in body and "days" in body
+        assert body["summary"]["expense"] >= 0
+
+        year = client.get(f"/api/v1/calendar/year?year={now.year}", headers=headers)
+        assert year.status_code == 200
+        ybody = year.json()
+        assert len(ybody["months"]) == 12
+        assert ybody["summary"]["income"] >= 0
+
+        day = client.get(
+            f"/api/v1/transactions?year={now.year}&month={now.month}&day=1&limit=50",
+            headers=headers,
+        )
+        assert day.status_code == 200
+        assert isinstance(day.json(), list)
