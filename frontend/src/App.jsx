@@ -146,22 +146,18 @@ const NAV = [
   ["books", "三本账"],
   ["calendar", "日历"],
   ["add", "记一笔"],
-  ["biz", "经营副业"],
-  ["budget", "预算"],
-  ["settings", "设置"],
-  ["backup", "数据备份"],
-  ["ai", "微信 / AI"],
+  ["me", "我的"],
 ];
 
 const TABS = [
-  { id: "home", label: "总览", icon: "🏡" },
-  { id: "books", label: "账本", icon: "📒" },
-  { id: "add", label: "记账", icon: "✎", fab: true },
-  { id: "calendar", label: "日历", icon: "📅" },
-  { id: "more", label: "更多", icon: "✦" },
+  { id: "home", label: "总览", icon: "⌂" },
+  { id: "books", label: "账本", icon: "☰" },
+  { id: "add", label: "记账", icon: "+", fab: true },
+  { id: "calendar", label: "日历", icon: "◎" },
+  { id: "me", label: "我的", icon: "☺" },
 ];
 
-const MORE_PAGES = ["more", "budget", "settings", "accounts", "backup", "ai", "biz"];
+const ME_PAGES = ["me", "more", "budget", "settings", "accounts", "backup", "ai", "biz", "family"];
 
 const WEEKDAYS = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"];
 
@@ -268,12 +264,19 @@ export default function App() {
         )}
         {page === "backup" && <BackupPanel token={token} me={me} show={show} />}
         {page === "ai" && <AiPanel token={token} show={show} me={me} />}
-        {page === "more" && <More go={setPage} logout={logout} me={me} />}
+        {(page === "me" || page === "more") && (
+          <MeHub
+            me={me}
+            go={setPage}
+            openSettings={openSettings}
+            logout={logout}
+          />
+        )}
         </div>
       </main>
       <nav className="tabbar" aria-label="手机导航">
         {TABS.map((tab) => {
-          const on = tab.id === "more" ? MORE_PAGES.includes(page) : page === tab.id;
+          const on = tab.id === "me" ? ME_PAGES.includes(page) : page === tab.id;
           return (
             <button
               key={tab.id}
@@ -335,49 +338,123 @@ function Login({ onLogin, show, toast }) {
   );
 }
 
-function More({ go, logout, me }) {
-  const items = [
-    ["biz", "经营副业", "副业收支与毛利，单独一本账"],
-    ["calendar", "收支日历", "按天、按月一眼看清家底"],
-    ["budget", "预算", "给这个月画一条温柔的线"],
-    ["settings", "设置", "资料头像、账本配置、家人与资金账户"],
-    ["backup", "数据备份", "手动备份与定时备份设置"],
-    ["ai", "微信 / AI", "语音记账 Token 与试写"],
+function MeHub({ me, go, openSettings, logout }) {
+  const groups = [
+    {
+      title: "账户",
+      items: [
+        ["profile", "我的资料", "头像、登录名、昵称与改密", () => openSettings("profile")],
+        ["members", "家庭成员", "添加家人、角色与微信别名", () => openSettings("members")],
+        ["wallets", "资金账户", "现金、银行卡、微信/支付宝", () => openSettings("wallets")],
+      ],
+    },
+    {
+      title: "账本与预算",
+      items: [
+        ["ledgers", "账本配置", "新建、编辑、封面与删除", () => openSettings("ledgers")],
+        ["budget", "预算", "给这个月画一条温柔的线", () => go("budget")],
+        ["biz", "经营副业", "副业收支与毛利单独一本账", () => go("biz")],
+      ],
+    },
+    {
+      title: "数据与智能",
+      items: [
+        ["backup", "数据备份", "手动备份、定时备份与恢复", () => go("backup")],
+        ["ai", "微信 / AI", "OpenClaw Token 与语音入账", () => go("ai")],
+      ],
+    },
   ];
+
   return (
-    <>
-      <h2 className="hello">更多</h2>
-      <p className="sub">预算、日历、经营和家人入口都在这里。底部中间按钮随时记账。</p>
-      <div className="more-list">
-        {items.map(([id, title, desc]) => (
-          <button key={id} className="more-item" onClick={() => go(id)}>
-            <strong>{title}</strong>
-            <span className="muted">{desc}</span>
-          </button>
-        ))}
-      </div>
+    <div className="me-hub">
+      <button type="button" className="me-hero" onClick={() => openSettings("profile")}>
+        <UserAvatar user={me?.user} size={64} />
+        <div className="me-hero-text">
+          <strong>{me?.user.display_name}</strong>
+          <span className="muted">
+            @{me?.user.username} · {me?.user.role === "owner" ? "家长" : me?.user.role === "viewer" ? "只读" : "成员"}
+          </span>
+          <span className="muted">{me?.household?.name}</span>
+        </div>
+        <span className="me-chevron" aria-hidden>
+          ›
+        </span>
+      </button>
+
+      {groups.map((g) => (
+        <section key={g.title} className="me-group">
+          <h3 className="me-group-title">{g.title}</h3>
+          <div className="me-list">
+            {g.items.map(([id, title, desc, action]) => (
+              <button key={id} type="button" className="me-row" onClick={action}>
+                <div className="me-row-text">
+                  <strong>{title}</strong>
+                  <span className="muted">{desc}</span>
+                </div>
+                <span className="me-chevron" aria-hidden>
+                  ›
+                </span>
+              </button>
+            ))}
+          </div>
+        </section>
+      ))}
+
       <div className="card install-card">
         <h3>添加到手机主屏幕</h3>
         <p className="muted">
-          iPhone：用 Safari 打开本页 → 底部分享 →「添加到主屏幕」。安卓 Chrome：菜单 →「添加到主屏幕」。之后像 App 一样全屏使用。
+          iPhone：Safari → 分享 →「添加到主屏幕」。安卓 Chrome：菜单 →「添加到主屏幕」或「安装应用」。
         </p>
-        <p className="muted">家里同一 Wi‑Fi 访问 http://NAS的IP:8907 即可。</p>
       </div>
-      <p className="muted" style={{ marginTop: 16 }}>
-        当前：{me?.user.display_name} · {me?.user.role === "owner" ? "家长" : "成员"}
-      </p>
-      <button className="btn ghost" style={{ marginTop: 8, width: "100%" }} onClick={logout}>
+
+      <button className="btn ghost logout-btn" onClick={logout}>
         退出登录
       </button>
-    </>
+    </div>
+  );
+}
+
+function Segmented({ value, options, onChange }) {
+  return (
+    <div className="segmented" role="tablist">
+      {options.map(([id, label]) => (
+        <button
+          key={id}
+          type="button"
+          role="tab"
+          aria-selected={value === id}
+          className={`segmented-item ${value === id ? "on" : ""}`}
+          onClick={() => onChange(id)}
+        >
+          {label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function FilterBar({ children, label }) {
+  return (
+    <div className="filter-bar">
+      {label && <span className="filter-bar-label">{label}</span>}
+      <div className="filter-scroll">{children}</div>
+    </div>
+  );
+}
+
+function FilterChip({ active, onClick, children, className = "" }) {
+  return (
+    <button type="button" className={`filter-chip ${active ? "on" : ""} ${className}`} onClick={onClick}>
+      {children}
+    </button>
   );
 }
 
 const CAL_WEEKDAYS = ["一", "二", "三", "四", "五", "六", "日"];
 const CAL_SCOPES = [
   ["all", "全部"],
-  ["family", "生活账"],
-  ["business", "经营账"],
+  ["family", "生活"],
+  ["business", "经营"],
 ];
 
 function pad2(n) {
@@ -501,13 +578,13 @@ function CalendarPage({ token, me, show, go }) {
 
   return (
     <div className="calendar-page">
-      <div className="topbar">
+      <div className="page-head">
         <div>
           <h2 className="hello">收支日历</h2>
           <p className="sub">
             {selectedPerson
               ? `正在看 ${selectedPerson.display_name} 的个人账本`
-              : "点一天看明细；可选某位家人，只看 TA 的账本。"}
+              : "点一天看明细；可按账本类型或家人筛选。"}
           </p>
         </div>
         <button className="btn desktop-only" type="button" onClick={() => go("add")}>
@@ -515,47 +592,38 @@ function CalendarPage({ token, me, show, go }) {
         </button>
       </div>
 
-      <div className="seg-tabs">
-        <button className={`seg ${mode === "month" ? "on" : ""}`} onClick={() => setMode("month")}>
-          月历
-        </button>
-        <button className={`seg ${mode === "year" ? "on" : ""}`} onClick={() => setMode("year")}>
-          年览
-        </button>
-      </div>
-
-      <div className="chips cal-scope">
-        {CAL_SCOPES.map(([id, label]) => (
-          <button
-            key={id}
-            type="button"
-            className={`chip ${scope === id ? "on" : ""}`}
-            onClick={() => setScope(id)}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-
-      <div className="chips cal-people">
-        <button
-          type="button"
-          className={`chip person-chip ${!personId ? "on" : ""}`}
-          onClick={() => setPersonId("")}
-        >
-          全家人
-        </button>
-        {visibleMembers.map((m) => (
-          <button
-            key={m.id}
-            type="button"
-            className={`chip person-chip ${String(personId) === String(m.id) ? "on" : ""}`}
-            onClick={() => setPersonId(String(m.id))}
-          >
-            <UserAvatar user={m} size={22} />
-            {m.display_name}
-          </button>
-        ))}
+      <div className="cal-toolbar">
+        <Segmented
+          value={mode}
+          options={[
+            ["month", "月历"],
+            ["year", "年览"],
+          ]}
+          onChange={setMode}
+        />
+        <FilterBar label="账本">
+          {CAL_SCOPES.map(([id, label]) => (
+            <FilterChip key={id} active={scope === id} onClick={() => setScope(id)}>
+              {label}
+            </FilterChip>
+          ))}
+        </FilterBar>
+        <FilterBar label="成员">
+          <FilterChip active={!personId} onClick={() => setPersonId("")}>
+            全家人
+          </FilterChip>
+          {visibleMembers.map((m) => (
+            <FilterChip
+              key={m.id}
+              active={String(personId) === String(m.id)}
+              onClick={() => setPersonId(String(m.id))}
+              className="person-filter"
+            >
+              <UserAvatar user={m} size={20} />
+              {m.display_name}
+            </FilterChip>
+          ))}
+        </FilterBar>
       </div>
 
       {mode === "month" && (
@@ -1098,23 +1166,32 @@ function Books({ token, me, show }) {
   const current = ledgers.find((l) => l.id === active);
   return (
     <div className="books-page">
-      <h2 className="hello">三本账，三种心情</h2>
-      <p className="sub">个人日常、家庭公共、经营副业。点开账本看流水，点击流水可编辑或删除。</p>
-      <div className="ledger-tabs">
-        {ledgers.map((l) => (
-          <button key={l.id} className={`chip ledger-chip ${active === l.id ? "on" : ""}`} onClick={() => setActive(l.id)}>
-            <LedgerThumb ledger={l} size={28} />
-            {l.name}
-          </button>
-        ))}
+      <div className="page-head">
+        <div>
+          <h2 className="hello">账本流水</h2>
+          <p className="sub">点账本切换；点流水可编辑或删除。</p>
+        </div>
       </div>
+      <FilterBar label="账本">
+        {ledgers.map((l) => (
+          <FilterChip
+            key={l.id}
+            active={active === l.id}
+            onClick={() => setActive(l.id)}
+            className="ledger-filter"
+          >
+            <LedgerThumb ledger={l} size={22} />
+            {l.name}
+          </FilterChip>
+        ))}
+      </FilterBar>
       {current && (
         <>
           {current.cover_url && (
             <div className="ledger-cover-banner" style={{ backgroundImage: `url(${current.cover_url})` }} />
           )}
-          <p className="muted">
-            {current.description || (current.type === "business" ? "这笔不进入家庭消费饼图。" : "会计入家庭总览。")}
+          <p className="muted books-desc">
+            {current.description || (current.type === "business" ? "经营账不进入家庭消费饼图。" : "会计入家庭总览。")}
           </p>
         </>
       )}
@@ -1187,15 +1264,22 @@ function Add({ token, show }) {
   }
   return (
     <div className="add-page">
-      <h2 className="hello">轻轻记一笔</h2>
+      <div className="page-head">
+        <div>
+          <h2 className="hello">记一笔</h2>
+          <p className="sub">选类型、金额与账本，轻轻记下。</p>
+        </div>
+      </div>
       <form className="card form-grid add-form" onSubmit={submit}>
-        <div className="chips" style={{ gridColumn: "1 / -1" }}>
-          <button type="button" className={`chip ${form.type === "expense" ? "on" : ""}`} onClick={() => setForm({ ...form, type: "expense", category_id: "" })}>
-            支出
-          </button>
-          <button type="button" className={`chip ${form.type === "income" ? "on" : ""}`} onClick={() => setForm({ ...form, type: "income", category_id: "" })}>
-            收入
-          </button>
+        <div style={{ gridColumn: "1 / -1" }}>
+          <Segmented
+            value={form.type}
+            options={[
+              ["expense", "支出"],
+              ["income", "收入"],
+            ]}
+            onChange={(type) => setForm({ ...form, type, category_id: "" })}
+          />
         </div>
         <label className="amount-field" style={{ gridColumn: "1 / -1" }}>
           金额
@@ -1211,19 +1295,19 @@ function Add({ token, show }) {
         </label>
         <label style={{ gridColumn: "1 / -1" }}>
           账本
-          <div className="ledger-pick">
+          <FilterBar>
             {ledgers.map((l) => (
-              <button
-                type="button"
+              <FilterChip
                 key={l.id}
-                className={`chip ledger-chip ${String(form.ledger_id) === String(l.id) ? "on" : ""}`}
+                active={String(form.ledger_id) === String(l.id)}
                 onClick={() => setForm({ ...form, ledger_id: l.id, category_id: "" })}
+                className="ledger-filter"
               >
-                <LedgerThumb ledger={l} size={28} />
-                <span className="ledger-chip-name">{l.name}</span>
-              </button>
+                <LedgerThumb ledger={l} size={22} />
+                {l.name}
+              </FilterChip>
             ))}
-          </div>
+          </FilterBar>
         </label>
         <label style={{ gridColumn: "1 / -1" }}>
           账户
@@ -1237,18 +1321,17 @@ function Add({ token, show }) {
         </label>
         <div className="cat-block" style={{ gridColumn: "1 / -1" }}>
           <span className="cat-label">分类</span>
-          <div className="chips">
+          <FilterBar>
             {filteredCats.map((c) => (
-              <button
-                type="button"
+              <FilterChip
                 key={c.id}
-                className={`chip ${String(form.category_id || filteredCats[0]?.id) === String(c.id) ? "on" : ""}`}
+                active={String(form.category_id || filteredCats[0]?.id) === String(c.id)}
                 onClick={() => setForm({ ...form, category_id: c.id })}
               >
                 {c.icon} {c.name}
-              </button>
+              </FilterChip>
             ))}
-          </div>
+          </FilterBar>
         </div>
         <label style={{ gridColumn: "1 / -1" }}>
           备注
@@ -1656,19 +1739,23 @@ function SettingsPanel({ token, me, show, onMeUpdate, initialTab = "profile" }) 
 
   return (
     <div className="accounts-page">
-      <h2 className="hello">设置</h2>
-      <p className="sub">个人资料与头像、账本配置、家庭成员与资金账户都在这里。</p>
-      <div className="seg-tabs">
-        {[
-          ["profile", "我的资料"],
-          ["ledgers", "账本配置"],
-          ["members", "家庭成员"],
-          ["wallets", "资金账户"],
-        ].map(([id, label]) => (
-          <button key={id} className={`seg ${tab === id ? "on" : ""}`} onClick={() => setTab(id)}>
-            {label}
-          </button>
-        ))}
+      <div className="page-head">
+        <div>
+          <h2 className="hello">设置</h2>
+          <p className="sub">资料、账本、家人与资金账户。</p>
+        </div>
+      </div>
+      <div className="settings-tabs-wrap">
+        <Segmented
+          value={tab}
+          options={[
+            ["profile", "资料"],
+            ["ledgers", "账本"],
+            ["members", "家人"],
+            ["wallets", "账户"],
+          ]}
+          onChange={setTab}
+        />
       </div>
 
       {tab === "profile" && (

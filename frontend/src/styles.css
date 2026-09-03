@@ -1012,6 +1012,237 @@ textarea {
   margin-top: 8px;
 }
 
+/* —— App 化：我的 / 分段 / 筛选条 —— */
+.page-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.me-hub {
+  width: 100%;
+  max-width: 560px;
+  min-width: 0;
+}
+
+.me-hero {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  text-align: left;
+  border: 1px solid rgba(255, 255, 255, 0.85);
+  background: var(--paper);
+  box-shadow: var(--shadow);
+  border-radius: var(--radius);
+  padding: 18px 16px;
+  cursor: pointer;
+  margin-bottom: 18px;
+  font-family: inherit;
+  color: var(--ink);
+}
+
+.me-hero-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.me-hero-text strong {
+  font-size: 20px;
+  font-family: "ZCOOL XiaoWei", serif;
+  font-weight: 400;
+}
+
+.me-chevron {
+  color: var(--muted);
+  font-size: 22px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.me-group {
+  margin-bottom: 16px;
+}
+
+.me-group-title {
+  margin: 0 0 8px 4px;
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--muted);
+  letter-spacing: 0.04em;
+}
+
+.me-list {
+  background: var(--paper);
+  border-radius: var(--radius);
+  border: 1px solid rgba(255, 255, 255, 0.85);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+.me-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  text-align: left;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  background: transparent;
+  padding: 14px 16px;
+  cursor: pointer;
+  font-family: inherit;
+  color: var(--ink);
+  min-height: 56px;
+}
+
+.me-row:last-child {
+  border-bottom: 0;
+}
+
+.me-row:active {
+  background: rgba(224, 122, 95, 0.06);
+}
+
+.me-row-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.me-row-text strong {
+  font-size: 15px;
+}
+
+.me-row-text .muted {
+  font-size: 12px;
+}
+
+.logout-btn {
+  width: 100%;
+  margin-top: 8px;
+  margin-bottom: 8px;
+}
+
+.segmented {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  gap: 4px;
+  padding: 4px;
+  background: rgba(61, 64, 91, 0.06);
+  border-radius: 14px;
+  width: 100%;
+}
+
+.segmented-item {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-weight: 800;
+  font-size: 14px;
+  padding: 10px 12px;
+  border-radius: 11px;
+  cursor: pointer;
+  font-family: inherit;
+  min-height: 40px;
+}
+
+.segmented-item.on {
+  background: #fff;
+  color: var(--ink);
+  box-shadow: 0 1px 4px rgba(61, 64, 91, 0.1);
+}
+
+.filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  width: 100%;
+  margin: 8px 0;
+}
+
+.filter-bar-label {
+  flex-shrink: 0;
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--muted);
+  width: 28px;
+}
+
+.filter-scroll {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  padding: 2px 2px 6px;
+  min-width: 0;
+  flex: 1;
+}
+
+.filter-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.filter-chip {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--line);
+  background: #fff;
+  color: var(--ink);
+  border-radius: 999px;
+  padding: 8px 14px;
+  min-height: 36px;
+  font-size: 13px;
+  font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.filter-chip.on {
+  background: var(--ink);
+  color: #fff;
+  border-color: var(--ink);
+}
+
+.filter-chip.ledger-filter,
+.filter-chip.person-filter {
+  padding-left: 8px;
+}
+
+.cal-toolbar {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 12px;
+}
+
+.settings-tabs-wrap {
+  margin: 0 0 16px;
+}
+
+.books-desc {
+  margin: 8px 0 12px;
+}
+
+.tab-icon {
+  font-size: 18px;
+  line-height: 1;
+  font-weight: 700;
+}
+
 @media (max-width: 860px) {
   .shell {
     grid-template-columns: 1fr;
@@ -1110,7 +1341,9 @@ textarea {
     display: grid;
     place-items: center;
     box-shadow: 0 10px 24px rgba(224, 122, 95, 0.4);
-    font-size: 20px;
+    font-size: 26px;
+    font-weight: 500;
+    line-height: 1;
   }
 
   .tab.fab.on .tab-icon {
