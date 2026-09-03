@@ -240,3 +240,21 @@ def test_calendar_month_and_year():
         )
         assert day.status_code == 200
         assert isinstance(day.json(), list)
+
+        me = client.get("/api/v1/me", headers=headers).json()["user"]
+        by_person = client.get(
+            f"/api/v1/calendar/month?year={now.year}&month={now.month}&owner_user_id={me['id']}",
+            headers=headers,
+        )
+        assert by_person.status_code == 200
+        pbody = by_person.json()
+        assert pbody["person"]["id"] == me["id"]
+        assert pbody["summary"]["expense"] >= 0
+
+        yuan = client.post("/api/v1/auth/login", json={"username": "yuan", "password": "luckynote"})
+        yuan_headers = {"Authorization": f"Bearer {yuan.json()['token']}"}
+        peek = client.get(
+            f"/api/v1/calendar/month?year={now.year}&month={now.month}&owner_user_id={me['id']}",
+            headers=yuan_headers,
+        )
+        assert peek.status_code == 403

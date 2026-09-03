@@ -400,14 +400,24 @@ function CalendarPage({ token, me, show, go }) {
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [scope, setScope] = useState("all");
+  const [personId, setPersonId] = useState("");
+  const [members, setMembers] = useState([]);
   const [monthData, setMonthData] = useState(null);
   const [yearData, setYearData] = useState(null);
   const [selectedDay, setSelectedDay] = useState(null);
   const [dayRows, setDayRows] = useState([]);
 
+  const personQs = personId ? `&owner_user_id=${personId}` : "";
+  const visibleMembers = members.filter((m) => me?.user.role === "owner" || m.id === me?.user.id);
+  const selectedPerson = members.find((m) => String(m.id) === String(personId));
+
+  useEffect(() => {
+    api("/api/v1/members", { token }).then(setMembers).catch(() => {});
+  }, [token]);
+
   useEffect(() => {
     if (mode !== "month") return;
-    api(`/api/v1/calendar/month?year=${year}&month=${month}&scope=${scope}`, { token })
+    api(`/api/v1/calendar/month?year=${year}&month=${month}&scope=${scope}${personQs}`, { token })
       .then((data) => {
         setMonthData(data);
         const inThisMonth = now.getFullYear() === year && now.getMonth() + 1 === month;
@@ -419,26 +429,35 @@ function CalendarPage({ token, me, show, go }) {
         setSelectedDay(first ? Number(first.slice(-2)) : 1);
       })
       .catch((err) => show(err.message));
-  }, [token, year, month, scope, mode]);
+  }, [token, year, month, scope, personId, mode]);
 
   useEffect(() => {
     if (mode !== "year") return;
-    api(`/api/v1/calendar/year?year=${year}&scope=${scope}`, { token })
+    api(`/api/v1/calendar/year?year=${year}&scope=${scope}${personQs}`, { token })
       .then(setYearData)
       .catch((err) => show(err.message));
-  }, [token, year, scope, mode]);
+  }, [token, year, scope, personId, mode]);
 
   useEffect(() => {
     if (mode !== "month" || !selectedDay) {
       setDayRows([]);
       return;
     }
-    api(
-      `/api/v1/transactions?year=${year}&month=${month}&day=${selectedDay}&limit=100`,
-      { token }
-    )
+    const qs = [
+      `year=${year}`,
+      `month=${month}`,
+      `day=${selectedDay}`,
+      "limit=100",
+      personId ? `owner_user_id=${personId}` : "",
+      scope === "business" ? "ledger_type=business" : "",
+    ]
+      .filter(Boolean)
+      .join("&");
+    api(`/api/v1/transactions?${qs}`, { token })
       .then((rows) => {
-        if (scope === "family") {
+        if (!personId && scope === "family") {
+          setDayRows(rows.filter((t) => t.ledger_type !== "business"));
+        } else if (personId && scope === "family") {
           setDayRows(rows.filter((t) => t.ledger_type !== "business"));
         } else if (scope === "business") {
           setDayRows(rows.filter((t) => t.ledger_type === "business"));
@@ -447,7 +466,7 @@ function CalendarPage({ token, me, show, go }) {
         }
       })
       .catch((err) => show(err.message));
-  }, [token, year, month, selectedDay, scope, mode]);
+  }, [token, year, month, selectedDay, scope, personId, mode]);
 
   function shiftMonth(delta) {
     let y = year;
@@ -485,7 +504,11 @@ function CalendarPage({ token, me, show, go }) {
       <div className="topbar">
         <div>
           <h2 className="hello">收支日历</h2>
-          <p className="sub">点一天看明细，切换年视图看每月结余。</p>
+          <p className="sub">
+            {selectedPerson
+              ? `正在看 ${selectedPerson.display_name} 的个人账本`
+              : "点一天看明细；可选某位家人，只看 TA 的账本。"}
+          </p>
         </div>
         <button className="btn desktop-only" type="button" onClick={() => go("add")}>
           记一笔
@@ -510,6 +533,27 @@ function CalendarPage({ token, me, show, go }) {
             onClick={() => setScope(id)}
           >
             {label}
+          </button>
+        ))}
+      </div>
+
+      <div className="chips cal-people">
+        <button
+          type="button"
+          className={`chip person-chip ${!personId ? "on" : ""}`}
+          onClick={() => setPersonId("")}
+        >
+          全家人
+        </button>
+        {visibleMembers.map((m) => (
+          <button
+            key={m.id}
+            type="button"
+            className={`chip person-chip ${String(personId) === String(m.id) ? "on" : ""}`}
+            onClick={() => setPersonId(String(m.id))}
+          >
+            <UserAvatar user={m} size={22} />
+            {m.display_name}
           </button>
         ))}
       </div>
@@ -588,7 +632,11 @@ function CalendarPage({ token, me, show, go }) {
                 </span>
               )}
             </h3>
-            {dayRows.length === 0 && <p className="muted">这一天还没有流水。</p>}
+            {dayRows.length === 0 && (
+              <p className="muted">
+                {selectedPerson ? `${selectedPerson.display_name} 这一天还没有个人账本流水。` : "这一天还没有流水。"}
+              </p>
+            )}
             {dayRows.map((t) => (
               <TxRow key={t.id} t={t} />
             ))}

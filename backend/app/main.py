@@ -707,6 +707,7 @@ def list_tx(
     year: Optional[int] = None,
     month: Optional[int] = None,
     day: Optional[int] = None,
+    owner_user_id: Optional[int] = None,
     tx_type: Optional[str] = None,
     limit: int = 200,
     user: User = Depends(current_user),
@@ -734,6 +735,9 @@ def list_tx(
         if user.role != "owner" and user_id != user.id:
             raise HTTPException(403, "只能查看自己的个人明细")
         q = q.filter(Transaction.user_id == user_id)
+    if owner_user_id is not None:
+        lids = _visible_ledger_ids(db, user, "all", owner_user_id)
+        q = q.filter(Transaction.ledger_id.in_(lids or [0]))
     if tx_type:
         q = q.filter(Transaction.type == tx_type)
     if user.role != "owner":
@@ -807,14 +811,32 @@ def delete_tx(tx_id: int, user: User = Depends(current_user), db: Session = Depe
     return {"ok": True}
 
 
-def _visible_ledger_ids(db: Session, user: User, scope: str = "all") -> list[int]:
+def _visible_ledger_ids(
+    db: Session, user: User, scope: str = "all", owner_user_id: int | None = None
+) -> list[int]:
     rows = db.query(Ledger).filter(Ledger.household_id == user.household_id).all()
     visible = [l for l in rows if can_see_ledger(user, l)]
+    if owner_user_id is not None:
+        target = db.get(User, owner_user_id)
+        if not target or target.household_id != user.household_id:
+            raise HTTPException(404, "成员不存在")
+        if user.role != "owner" and owner_user_id != user.id:
+            raise HTTPException(403, "只能查看自己的个人账本")
+        visible = [l for l in visible if l.owner_user_id == owner_user_id]
     if scope == "family":
-        return [l.id for l in visible if l.include_in_family]
+        return [l.id for l in visible if l.type != "business"]
     if scope == "business":
         return [l.id for l in visible if l.type == "business"]
     return [l.id for l in visible]
+
+
+def _calendar_person(db: Session, owner_user_id: int | None) -> dict | None:
+    if not owner_user_id:
+        return None
+    who = db.get(User, owner_user_id)
+    if not who:
+        return None
+    return {"id": who.id, "display_name": who.display_name, "avatar_color": who.avatar_color}
 
 
 @app.get("/api/v1/calendar/month")
@@ -822,6 +844,7 @@ def calendar_month(
     year: Optional[int] = None,
     month: Optional[int] = None,
     scope: str = "all",
+    owner_user_id: Optional[int] = None,
     user: User = Depends(current_user),
     db: Session = Depends(get_db),
 ):
@@ -832,7 +855,7 @@ def calendar_month(
     if month < 1 or month > 12:
         raise HTTPException(400, "月份无效")
     start, end = month_range(year, month)
-    lids = _visible_ledger_ids(db, user, scope)
+    lids = _visible_ledger_ids(db, user, scope, owner_user_id)
     days_map: dict[str, dict] = {}
     if lids:
         rows = (
@@ -868,6 +891,7 @@ def calendar_month(
         "year": year,
         "month": month,
         "scope": scope,
+        "person": _calendar_person(db, owner_user_id),
         "summary": {
             "income": income,
             "expense": expense,
@@ -883,13 +907,14 @@ def calendar_month(
 def calendar_year(
     year: Optional[int] = None,
     scope: str = "all",
+    owner_user_id: Optional[int] = None,
     user: User = Depends(current_user),
     db: Session = Depends(get_db),
 ):
     """按月汇总：一年里各月收支一眼看完。"""
     now = datetime.now()
     year = year or now.year
-    lids = _visible_ledger_ids(db, user, scope)
+    lids = _visible_ledger_ids(db, user, scope, owner_user_id)
     months = []
     year_income = 0.0
     year_expense = 0.0
@@ -911,6 +936,7 @@ def calendar_year(
     return {
         "year": year,
         "scope": scope,
+        "person": _calendar_person(db, owner_user_id),
         "summary": {
             "income": round(year_income, 2),
             "expense": round(year_expense, 2),
