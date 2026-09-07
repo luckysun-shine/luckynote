@@ -280,16 +280,25 @@ export default function App() {
           return (
             <button
               key={tab.id}
+              type="button"
               className={`tab ${on ? "on" : ""} ${tab.fab ? "fab" : ""}`}
+              aria-current={on ? "page" : undefined}
+              aria-label={tab.label}
               onClick={() => setPage(tab.id)}
             >
-              <span className="tab-icon">{tab.icon}</span>
+              <span className="tab-icon" aria-hidden="true">
+                {tab.icon}
+              </span>
               <span>{tab.label}</span>
             </button>
           );
         })}
       </nav>
-      {toast && <div className="toast">{toast}</div>}
+      {toast && (
+        <div className="toast" role="status" aria-live="polite">
+          {toast}
+        </div>
+      )}
     </div>
   );
 }
@@ -375,7 +384,11 @@ function Login({ onLogin, show, toast }) {
           </button>
         </form>
       </div>
-      {toast && <div className="toast">{toast}</div>}
+      {toast && (
+        <div className="toast" role="status" aria-live="polite">
+          {toast}
+        </div>
+      )}
     </div>
   );
 }
@@ -1177,7 +1190,7 @@ function TransactionList({ token, me, show, query, emptyText = "还没有流水�
           onEdit={(row) => setEditTx(row)}
         />
       ))}
-      {rows.length === 0 && <p className="muted">{emptyText}</p>}
+      {rows.length === 0 && <div className="empty-state">{emptyText}</div>}
       {editTx && (
         <TxEditModal
           tx={editTx}
