@@ -295,41 +295,83 @@ export default function App() {
 }
 
 function Login({ onLogin, show, toast }) {
-  const [username, setUsername] = useState("lin");
-  const [password, setPassword] = useState("luckynote");
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [busy, setBusy] = useState(false);
 
   async function submit(e) {
     e.preventDefault();
+    if (!username.trim() || !password) {
+      show("请输入用户名和密码");
+      return;
+    }
+    setBusy(true);
     try {
-      const data = await api("/api/v1/auth/login", { method: "POST", body: { username, password } });
+      const data = await api("/api/v1/auth/login", {
+        method: "POST",
+        body: { username: username.trim(), password },
+      });
       onLogin(data.token);
     } catch (err) {
       show(err.message);
+    } finally {
+      setBusy(false);
     }
   }
 
   return (
     <div className="login-wrap">
-      <div className="login-card">
-        <div className="hero">
-          <h2 className="brand-cn login-brand">{BRAND_NAME}</h2>
-          <p className="sub">把每一笔生活，记进 lucky 账本。家人各自记账，月底一起看家底。</p>
-          <p className="muted" style={{ marginTop: 24 }}>
-            演示账号 lin / yuan，密码均为 luckynote
-          </p>
-        </div>
-        <form className="login-form" onSubmit={submit}>
-          <h3>欢迎回来</h3>
-          <label>
-            用户名
-            <input autoComplete="username" value={username} onChange={(e) => setUsername(e.target.value)} />
+      <div className="login-stage">
+        <header className="login-hero">
+          <img className="login-mark" src="/icons/icon-192.png" alt="" width="72" height="72" />
+          <h1 className="brand-cn login-brand">{BRAND_NAME}</h1>
+          <p className="login-tagline">把每一笔生活，记进家里的账本。</p>
+        </header>
+
+        <form className="login-panel" onSubmit={submit} noValidate>
+          <h2 className="login-panel-title">登录</h2>
+          <p className="login-panel-sub">使用家庭账号进入 lucky 账本</p>
+
+          <label className="login-field">
+            <span>用户名</span>
+            <input
+              autoComplete="username"
+              name="username"
+              placeholder="请输入用户名"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              disabled={busy}
+              autoFocus
+            />
           </label>
-          <label style={{ marginTop: 12 }}>
-            密码
-            <input type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} />
+
+          <label className="login-field">
+            <span>密码</span>
+            <div className="login-password-row">
+              <input
+                type={showPassword ? "text" : "password"}
+                autoComplete="current-password"
+                name="password"
+                placeholder="请输入密码"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                disabled={busy}
+              />
+              <button
+                type="button"
+                className="login-eye"
+                onClick={() => setShowPassword((v) => !v)}
+                aria-label={showPassword ? "隐藏密码" : "显示密码"}
+                tabIndex={-1}
+              >
+                {showPassword ? "隐藏" : "显示"}
+              </button>
+            </div>
           </label>
-          <button className="btn" style={{ marginTop: 22, width: "100%" }}>
-            登录
+
+          <button className="btn login-submit" disabled={busy}>
+            {busy ? "登录中…" : "进入账本"}
           </button>
         </form>
       </div>
