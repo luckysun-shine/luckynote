@@ -222,7 +222,7 @@ export default function App() {
           <UserAvatar user={me?.user} size={52} className="brand-avatar" />
           <div>
             <h1 className="brand-cn">{BRAND_NAME}</h1>
-            <p>LuckyNote · 家庭小金库</p>
+            <p>家庭账本 · 印记分明</p>
           </div>
         </button>
         <nav className="nav">
@@ -335,12 +335,12 @@ function Login({ onLogin, show, toast }) {
         <header className="login-hero">
           <img className="login-mark" src="/icons/icon-192.png" alt="" width="72" height="72" />
           <h1 className="brand-cn login-brand">{BRAND_NAME}</h1>
-          <p className="login-tagline">把每一笔生活，记进家里的账本。</p>
+          <p className="login-tagline">家里的每一笔，落成清楚的账。</p>
         </header>
 
         <form className="login-panel" onSubmit={submit} noValidate>
-          <h2 className="login-panel-title">登录</h2>
-          <p className="login-panel-sub">使用家庭账号进入 lucky 账本</p>
+          <h2 className="login-panel-title">进入账本</h2>
+          <p className="login-panel-sub">使用家庭账号登录</p>
 
           <label className="login-field">
             <span>用户名</span>
@@ -380,7 +380,7 @@ function Login({ onLogin, show, toast }) {
           </label>
 
           <button className="btn login-submit" disabled={busy}>
-            {busy ? "登录中…" : "进入账本"}
+            {busy ? "登录中…" : "登录"}
           </button>
         </form>
       </div>
@@ -838,54 +838,57 @@ function Home({ token, me, go }) {
   useEffect(() => {
     api("/api/v1/dashboard", { token }).then(setDash);
   }, [token]);
-  if (!dash) return <p>窝窝正在翻账本…</p>;
+  if (!dash) return <p className="muted">正在打开账本…</p>;
   return (
     <>
       <div className="topbar">
         <div>
           <h2 className="hello">
-            <span className="hello-full">晚上好，{me?.user.display_name}。窝窝守着账本呢。</span>
-            <span className="hello-short">你好，{me?.user.display_name}</span>
+            <span className="hello-full">{me?.user.display_name}，本月家底一目了然</span>
+            <span className="hello-short">{me?.user.display_name}</span>
           </h2>
           <p className="sub">
-            {dash.period.year} 年 {dash.period.month} 月 · 生活账与经营账已分开
+            {dash.period.year} 年 {dash.period.month} 月 · 生活账与经营账分开记
           </p>
         </div>
         <button className="btn desktop-only" onClick={() => go("add")}>
           记一笔
         </button>
       </div>
-      <div className="row stats">
-        <div className="card coral">
-          <div className="label">家庭支出</div>
-          <div className="num">¥ {money(dash.family.expense)}</div>
+
+      <section className="balance-hero" aria-label="本月家庭结余">
+        <p className="balance-kicker">
+          {dash.period.year} 年 {dash.period.month} 月 · 家庭结余
+        </p>
+        <p className="balance-figure">¥ {money(dash.family.balance)}</p>
+        <div className="balance-split">
+          <div>
+            <span>收入</span>
+            <strong className="pos">¥ {money(dash.family.income)}</strong>
+          </div>
+          <div>
+            <span>支出</span>
+            <strong className="neg">¥ {money(dash.family.expense)}</strong>
+          </div>
+          <div>
+            <span>副业毛利</span>
+            <strong>¥ {money(dash.business.profit)}</strong>
+          </div>
         </div>
-        <div className="card sage">
-          <div className="label">家庭收入</div>
-          <div className="num">¥ {money(dash.family.income)}</div>
-        </div>
-        <div className="card butter">
-          <div className="label">家庭结余</div>
-          <div className="num">¥ {money(dash.family.balance)}</div>
-        </div>
-        <div className="card">
-          <div className="label">副业本月毛利</div>
-          <div className="num">¥ {money(dash.business.profit)}</div>
-          <p className="muted">不计入日常消费结构</p>
-        </div>
-      </div>
+      </section>
+
       <div className="row two">
         <div className="card">
           <h3>近半年家庭收支</h3>
           <div className="chart-box">
             <ResponsiveContainer>
               <AreaChart data={dash.trend}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#efe6dc" />
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(22,25,31,0.08)" />
                 <XAxis dataKey="label" />
                 <YAxis />
                 <Tooltip />
-                <Area type="monotone" dataKey="income" stroke="#81b29a" fill="#cfe8dc" name="收入" />
-                <Area type="monotone" dataKey="expense" stroke="#e07a5f" fill="#f4dcd4" name="支出" />
+                <Area type="monotone" dataKey="income" stroke="#2F6F5E" fill="#D7E8E1" name="收入" />
+                <Area type="monotone" dataKey="expense" stroke="#B91C1C" fill="#F0D9D6" name="支出" />
               </AreaChart>
             </ResponsiveContainer>
           </div>
@@ -918,11 +921,11 @@ function Home({ token, me, go }) {
               <strong>¥ {money(m.expense)}</strong>
             </div>
           ))}
-          <p className="muted">公共账本开支不拆到个人头上，另记在家庭公共。</p>
+          <p className="muted">公共账本开支不拆到个人，记在家庭公共。</p>
         </div>
         <div className="card">
-          <h3>预算温度</h3>
-          {dash.budgets.length === 0 && <p className="muted">还没有预算，去「预算」页轻轻设一笔。</p>}
+          <h3>预算进度</h3>
+          {dash.budgets.length === 0 && <p className="muted">还没有预算，去「预算」页设一笔。</p>}
           {dash.budgets.map((b) => (
             <div key={b.id} style={{ marginBottom: 12 }}>
               <div style={{ display: "flex", justifyContent: "space-between" }}>
