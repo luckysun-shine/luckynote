@@ -1,4 +1,4 @@
-const CACHE = "luckynest-shell-v12";
+const CACHE = "luckynest-shell-v13";
 
 self.addEventListener("install", (event) => {
   event.waitUntil(

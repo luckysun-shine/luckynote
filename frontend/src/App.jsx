@@ -184,10 +184,23 @@ export default function App() {
   const [page, setPage] = useState("home");
   const [settingsTab, setSettingsTab] = useState("profile");
   const [toast, setToast] = useState("");
+  const [addOpen, setAddOpen] = useState(false);
 
   function openSettings(tab = "profile") {
     setSettingsTab(tab);
     setPage("settings");
+  }
+
+  function openAdd() {
+    setAddOpen(true);
+  }
+
+  function go(next) {
+    if (next === "add") {
+      openAdd();
+      return;
+    }
+    setPage(next);
   }
 
   function show(msg) {
@@ -244,7 +257,11 @@ export default function App() {
         </button>
         <nav className="nav">
           {NAV.map(([id, label]) => (
-            <button key={id} className={page === id ? "active" : ""} onClick={() => setPage(id)}>
+            <button
+              key={id}
+              className={id === "add" ? (addOpen ? "active" : "") : page === id ? "active" : ""}
+              onClick={() => go(id)}
+            >
               {label}
             </button>
           ))}
@@ -264,10 +281,9 @@ export default function App() {
       </aside>
       <main className="main">
         <div className="page-stack">
-        {page === "home" && <Home token={token} me={me} go={setPage} show={show} />}
+        {page === "home" && <Home token={token} me={me} go={go} show={show} />}
         {page === "books" && <Books token={token} me={me} show={show} />}
-        {page === "calendar" && <CalendarPage token={token} me={me} show={show} go={setPage} />}
-        {page === "add" && <Add token={token} show={show} go={setPage} />}
+        {page === "calendar" && <CalendarPage token={token} me={me} show={show} go={go} />}
         {page === "accounts" && <AccountsHome token={token} me={me} show={show} openSettings={openSettings} />}
         {page === "biz" && <Biz token={token} me={me} show={show} />}
         {page === "budget" && <Budget token={token} show={show} />}
@@ -285,7 +301,7 @@ export default function App() {
         {(page === "me" || page === "more") && (
           <MeHub
             me={me}
-            go={setPage}
+            go={go}
             openSettings={openSettings}
             logout={logout}
           />
@@ -294,7 +310,11 @@ export default function App() {
       </main>
       <nav className="tabbar" aria-label="手机导航">
         {TABS.map((tab) => {
-          const on = tab.id === "me" ? ME_PAGES.includes(page) : page === tab.id;
+          const on = tab.fab
+            ? addOpen
+            : tab.id === "me"
+              ? ME_PAGES.includes(page)
+              : page === tab.id;
           return (
             <button
               key={tab.id}
@@ -302,7 +322,7 @@ export default function App() {
               className={`tab ${on ? "on" : ""} ${tab.fab ? "fab" : ""}`}
               aria-current={on ? "page" : undefined}
               aria-label={tab.label}
-              onClick={() => setPage(tab.id)}
+              onClick={() => (tab.fab ? openAdd() : go(tab.id))}
             >
               <span className="tab-icon" aria-hidden="true">
                 {tab.icon}
@@ -312,6 +332,13 @@ export default function App() {
           );
         })}
       </nav>
+      {addOpen && (
+        <AddSheet
+          token={token}
+          show={show}
+          onClose={() => setAddOpen(false)}
+        />
+      )}
       {toast && (
         <div className="toast" role="status" aria-live="polite">
           {toast}
@@ -1551,7 +1578,7 @@ function Books({ token, me, show }) {
   );
 }
 
-function Add({ token, show, go }) {
+function AddSheet({ token, show, onClose }) {
   const [ledgers, setLedgers] = useState([]);
   const [accounts, setAccounts] = useState([]);
   const [cats, setCats] = useState([]);
@@ -1563,6 +1590,8 @@ function Add({ token, show, go }) {
     account_id: "",
     category_id: "",
   });
+  useBodyScrollLock(true);
+
   useEffect(() => {
     Promise.all([
       api("/api/v1/ledgers", { token }),
@@ -1579,10 +1608,12 @@ function Add({ token, show, go }) {
       }));
     });
   }, [token]);
+
   const ledger = ledgers.find((l) => String(l.id) === String(form.ledger_id));
   const filteredCats = cats.filter(
     (c) => c.kind === form.type && (!ledger || c.ledger_type === ledger.type)
   );
+
   async function submit(e) {
     e.preventDefault();
     try {
@@ -1598,95 +1629,108 @@ function Add({ token, show, go }) {
         },
       });
       show("窝窝记下了 ✓");
-      setForm((f) => ({ ...f, amount: "", note: "" }));
-      if (typeof go === "function") go("home");
+      onClose();
     } catch (err) {
       show(err.message);
     }
   }
+
   return (
-    <div className="add-page">
-      <div className="page-head">
-        <div>
-          <h2 className="hello">记一笔</h2>
-          <p className="sub">选类型、金额与账本，轻轻记下。</p>
-        </div>
-        {typeof go === "function" && (
-          <button type="button" className="text-link" onClick={() => go("home")}>
+    <div className="modal-backdrop add-sheet-backdrop" onClick={onClose}>
+      <form
+        className="card modal add-sheet"
+        onSubmit={submit}
+        onClick={(e) => e.stopPropagation()}
+        aria-labelledby="add-sheet-title"
+      >
+        <div className="add-sheet-head">
+          <div>
+            <h2 id="add-sheet-title" className="add-sheet-title">
+              记一笔
+            </h2>
+            <p className="add-sheet-sub">选类型、金额与账本</p>
+          </div>
+          <button type="button" className="text-link add-sheet-cancel" onClick={onClose}>
             取消
           </button>
-        )}
-      </div>
-      <form className="card form-grid add-form" onSubmit={submit}>
-        <div style={{ gridColumn: "1 / -1" }}>
-          <Segmented
-            value={form.type}
-            options={[
-              ["expense", "支出"],
-              ["income", "收入"],
-            ]}
-            onChange={(type) => setForm({ ...form, type, category_id: "" })}
-          />
         </div>
-        <label className="amount-field" style={{ gridColumn: "1 / -1" }}>
-          金额
-          <input
-            type="text"
-            inputMode="decimal"
-            pattern="[0-9]*[.]?[0-9]*"
-            value={form.amount}
-            onChange={(e) => setForm({ ...form, amount: e.target.value.replace(/[^\d.]/g, "") })}
-            placeholder="0.00"
-            required
-          />
-        </label>
-        <div className="field-block" style={{ gridColumn: "1 / -1" }}>
-          <span className="cat-label">账本</span>
-          <FilterBar>
-            {ledgers.map((l) => (
-              <FilterChip
-                key={l.id}
-                active={String(form.ledger_id) === String(l.id)}
-                onClick={() => setForm({ ...form, ledger_id: l.id, category_id: "" })}
-                className="ledger-filter"
-              >
-                <LedgerThumb ledger={l} size={22} />
-                {l.name}
-              </FilterChip>
-            ))}
-          </FilterBar>
+
+        <div className="form-grid add-form">
+          <div style={{ gridColumn: "1 / -1" }}>
+            <Segmented
+              value={form.type}
+              options={[
+                ["expense", "支出"],
+                ["income", "收入"],
+              ]}
+              onChange={(type) => setForm({ ...form, type, category_id: "" })}
+            />
+          </div>
+          <label className="amount-field" style={{ gridColumn: "1 / -1" }}>
+            金额
+            <input
+              type="text"
+              inputMode="decimal"
+              pattern="[0-9]*[.]?[0-9]*"
+              value={form.amount}
+              onChange={(e) => setForm({ ...form, amount: e.target.value.replace(/[^\d.]/g, "") })}
+              placeholder="0.00"
+              required
+              autoFocus
+            />
+          </label>
+          <div className="field-block" style={{ gridColumn: "1 / -1" }}>
+            <span className="cat-label">账本</span>
+            <div className="chip-wrap">
+              {ledgers.map((l) => (
+                <FilterChip
+                  key={l.id}
+                  active={String(form.ledger_id) === String(l.id)}
+                  onClick={() => setForm({ ...form, ledger_id: l.id, category_id: "" })}
+                  className="ledger-filter"
+                >
+                  <LedgerThumb ledger={l} size={20} />
+                  {l.name}
+                </FilterChip>
+              ))}
+            </div>
+          </div>
+          <label style={{ gridColumn: "1 / -1" }}>
+            账户
+            <select value={form.account_id} onChange={(e) => setForm({ ...form, account_id: e.target.value })}>
+              {accounts.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.name} · {accountKindLabel(a.kind)}
+                </option>
+              ))}
+            </select>
+          </label>
+          <div className="cat-block" style={{ gridColumn: "1 / -1" }}>
+            <span className="cat-label">分类</span>
+            <div className="chip-wrap">
+              {filteredCats.map((c) => (
+                <FilterChip
+                  key={c.id}
+                  active={String(form.category_id || filteredCats[0]?.id) === String(c.id)}
+                  onClick={() => setForm({ ...form, category_id: c.id })}
+                >
+                  {c.icon} {c.name}
+                </FilterChip>
+              ))}
+            </div>
+          </div>
+          <label style={{ gridColumn: "1 / -1" }}>
+            备注
+            <input
+              value={form.note}
+              onChange={(e) => setForm({ ...form, note: e.target.value })}
+              placeholder="午饭 / 客户尾款 / 水电…"
+            />
+          </label>
+          <button className="btn add-submit" style={{ gridColumn: "1 / -1" }}>
+            保存这笔
+          </button>
         </div>
-        <label style={{ gridColumn: "1 / -1" }}>
-          账户
-          <select value={form.account_id} onChange={(e) => setForm({ ...form, account_id: e.target.value })}>
-            {accounts.map((a) => (
-              <option key={a.id} value={a.id}>
-                {a.name} · {accountKindLabel(a.kind)}
-              </option>
-            ))}
-          </select>
-        </label>
-        <div className="cat-block" style={{ gridColumn: "1 / -1" }}>
-          <span className="cat-label">分类</span>
-          <FilterBar>
-            {filteredCats.map((c) => (
-              <FilterChip
-                key={c.id}
-                active={String(form.category_id || filteredCats[0]?.id) === String(c.id)}
-                onClick={() => setForm({ ...form, category_id: c.id })}
-              >
-                {c.icon} {c.name}
-              </FilterChip>
-            ))}
-          </FilterBar>
-        </div>
-        <label style={{ gridColumn: "1 / -1" }}>
-          备注
-          <input value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} placeholder="午饭 / 客户尾款 / 水电…" />
-        </label>
-        <button className="btn add-submit" style={{ gridColumn: "1 / -1" }}>
-          保存这笔
-        </button>
       </form>
     </div>
   );

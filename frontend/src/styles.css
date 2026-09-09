@@ -2062,6 +2062,19 @@ textarea {
     padding-bottom: max(16px, env(safe-area-inset-bottom, 0px));
   }
 
+  .add-sheet {
+    width: 100%;
+    max-width: 100%;
+    max-height: min(90vh, 780px);
+    border-radius: 22px 22px 0 0;
+    padding: 16px 16px max(20px, env(safe-area-inset-bottom, 0px));
+  }
+
+  .add-sheet-cancel {
+    font-size: 1rem;
+    padding: 0 4px 0 12px;
+  }
+
   .tx.editable:active {
     background: var(--brand-l);
   }
@@ -2561,6 +2574,66 @@ textarea {
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+.chip-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  width: 100%;
+}
+
+.chip-wrap .filter-chip {
+  max-width: 100%;
+}
+
+.add-sheet-backdrop {
+  z-index: 40;
+}
+
+.add-sheet {
+  width: min(480px, 100%);
+  max-height: min(92vh, 760px);
+  overflow: auto;
+  padding: 18px 18px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.add-sheet-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding-right: 4px;
+}
+
+.add-sheet-title {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 800;
+}
+
+.add-sheet-sub {
+  margin: 4px 0 0;
+  color: var(--ink2);
+  font-size: var(--text-sm);
+}
+
+.add-sheet-cancel {
+  flex-shrink: 0;
+  white-space: nowrap;
+  font-size: 1rem;
+  letter-spacing: 0.04em;
+}
+
+.add-sheet .add-form {
+  margin-top: 0;
+  border: 0;
+  box-shadow: none;
+  padding: 0;
+  background: transparent;
 }
 
 .text-link {
