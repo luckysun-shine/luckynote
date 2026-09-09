@@ -1,40 +1,21 @@
-# lucky账本 Design System · 印记账本
+# luckynest Design System
 
-Guided by **frontend-design** + product vernacular (Chinese household ledger).
-
-## Direction
-
-**印记账本 (Seal Ledger)** — cool celadon-tinted paper, ink black type, 朱砂 seal red for action/expense, celadon for income. Distinct from warm cream + terracotta AI defaults and dark fintech glass.
+Aligned to `docs/prototypes/luckynest-app.html` + brand logo.
 
 ## Tokens
 
 ```css
-:root {
-  --ground: #e8ede6;
-  --paper: #f5f7f2;
-  --ink: #16191f;
-  --muted: #5c6470;
-  --seal: #b91c1c;
-  --seal-deep: #8f1414;
-  --celadon: #2f6f5e;
-  --celadon-soft: #d7e8e1;
-  --gold: #a67c00;
-  --coral: var(--seal); /* legacy alias */
-  --coral-deep: var(--seal-deep);
-  --sage: var(--celadon);
-  --sage-deep: #245748;
-  --butter: #e6d39a;
-  --blush: #f0d9d6;
-  --line: rgba(22, 25, 31, 0.12);
-  --shadow: 0 1px 0 rgba(22, 25, 31, 0.04), 0 14px 32px rgba(22, 25, 31, 0.07);
-  --radius: 16px;
-  --focus: var(--seal);
-  --duration: 180ms;
-}
+--bg:#f7f5fc; --card:#ffffff; --ink:#262038; --ink2:#6e6485; --ink3:#a79cc0;
+--line:#efeaf6; --brand:#c8a4f0; --brand-d:#8f6fd6; --brand-l:#f3edfc;
+--teal:#c1e7dc; --amber:#ffd98a; --red:#ff9d9d;
 ```
 
-## Hierarchy
+## Brand
 
-1. One hero moment per primary screen (login brand / home balance)
-2. Secondary data as quiet splits or ruled lists
-3. Cards for forms and interactive panels only — not decorative metric tiles with gradients
+- Name: **luckynest**
+- Tagline: 幸运记账 · 账户独立 · 日历一看就懂
+- Logo: `/brand/luckynest-logo.jpg` · mark `/brand/luckynest-mark.png`
+
+## Nav
+
+首页 · 日历 · 记一笔 · 账户 · 我的

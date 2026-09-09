@@ -139,25 +139,26 @@ function accountKindLabel(kind) {
   return ACCOUNT_KIND_LABELS[kind] || kind;
 }
 
-const BRAND_NAME = "lucky账本";
+const BRAND_NAME = "luckynest";
+const BRAND_TAGLINE = "幸运记账 · 账户独立 · 日历一看就懂";
 
 const NAV = [
-  ["home", "总览"],
-  ["books", "三本账"],
+  ["home", "首页"],
   ["calendar", "日历"],
   ["add", "记一笔"],
+  ["accounts", "账户"],
   ["me", "我的"],
 ];
 
 const TABS = [
-  { id: "home", label: "总览", icon: "⌂" },
-  { id: "books", label: "账本", icon: "☰" },
-  { id: "add", label: "记账", icon: "+", fab: true },
-  { id: "calendar", label: "日历", icon: "◎" },
+  { id: "home", label: "首页", icon: "⌂" },
+  { id: "calendar", label: "日历", icon: "▦" },
+  { id: "add", label: "记一笔", icon: "+", fab: true },
+  { id: "accounts", label: "账户", icon: "▣" },
   { id: "me", label: "我的", icon: "☺" },
 ];
 
-const ME_PAGES = ["me", "more", "budget", "settings", "accounts", "backup", "ai", "biz", "family"];
+const ME_PAGES = ["me", "more", "budget", "settings", "books", "backup", "ai", "biz", "family"];
 
 const WEEKDAYS = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"];
 
@@ -219,10 +220,10 @@ export default function App() {
       </header>
       <aside className="sider">
         <button type="button" className="brand brand-clickable" onClick={() => openSettings("profile")}>
-          <UserAvatar user={me?.user} size={52} className="brand-avatar" />
+          <img className="brand-logo" src="/brand/luckynest-mark.png" alt="" width="52" height="52" />
           <div>
             <h1 className="brand-cn">{BRAND_NAME}</h1>
-            <p>家庭账本 · 印记分明</p>
+            <p>家庭账本 · 幸运记账</p>
           </div>
         </button>
         <nav className="nav">
@@ -251,9 +252,10 @@ export default function App() {
         {page === "books" && <Books token={token} me={me} show={show} />}
         {page === "calendar" && <CalendarPage token={token} me={me} show={show} go={setPage} />}
         {page === "add" && <Add token={token} show={show} />}
+        {page === "accounts" && <AccountsHome token={token} me={me} show={show} openSettings={openSettings} />}
         {page === "biz" && <Biz token={token} me={me} show={show} />}
         {page === "budget" && <Budget token={token} show={show} />}
-        {(page === "settings" || page === "accounts" || page === "family") && (
+        {(page === "settings" || page === "family") && (
           <SettingsPanel
             token={token}
             me={me}
@@ -308,6 +310,7 @@ function Login({ onLogin, show, toast }) {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [remember, setRemember] = useState(true);
 
   async function submit(e) {
     e.preventDefault();
@@ -321,6 +324,8 @@ function Login({ onLogin, show, toast }) {
         method: "POST",
         body: { username: username.trim(), password },
       });
+      if (remember) localStorage.setItem("ln_remember_user", username.trim());
+      else localStorage.removeItem("ln_remember_user");
       onLogin(data.token);
     } catch (err) {
       show(err.message);
@@ -329,18 +334,29 @@ function Login({ onLogin, show, toast }) {
     }
   }
 
+  useEffect(() => {
+    const saved = localStorage.getItem("ln_remember_user");
+    if (saved) setUsername(saved);
+  }, []);
+
   return (
     <div className="login-wrap">
       <div className="login-stage">
         <header className="login-hero">
-          <img className="login-mark" src="/icons/icon-192.png" alt="" width="72" height="72" />
-          <h1 className="brand-cn login-brand">{BRAND_NAME}</h1>
-          <p className="login-tagline">家里的每一笔，落成清楚的账。</p>
+          <h1 className="sr-only">{BRAND_NAME}</h1>
+          <img
+            className="login-logo"
+            src="/brand/luckynest-logo.png"
+            alt="luckynest"
+            width="168"
+            height="168"
+          />
+          <p className="login-tagline">{BRAND_TAGLINE}</p>
         </header>
 
         <form className="login-panel" onSubmit={submit} noValidate>
-          <h2 className="login-panel-title">进入账本</h2>
-          <p className="login-panel-sub">使用家庭账号登录</p>
+          <h2 className="login-panel-title">账号登录</h2>
+          <p className="login-panel-sub">使用家庭账号进入账本</p>
 
           <label className="login-field">
             <span>用户名</span>
@@ -379,8 +395,13 @@ function Login({ onLogin, show, toast }) {
             </div>
           </label>
 
+          <label className="login-remember">
+            <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} />
+            记住我
+          </label>
+
           <button className="btn login-submit" disabled={busy}>
-            {busy ? "登录中…" : "登录"}
+            {busy ? "登录中…" : "登 录"}
           </button>
         </form>
       </div>
@@ -400,14 +421,15 @@ function MeHub({ me, go, openSettings, logout }) {
       items: [
         ["profile", "我的资料", "头像、登录名、昵称与改密", () => openSettings("profile")],
         ["members", "家庭成员", "添加家人、角色与微信别名", () => openSettings("members")],
-        ["wallets", "资金账户", "现金、银行卡、微信/支付宝", () => openSettings("wallets")],
+        ["accounts", "资金账户", "现金、银行卡、微信/支付宝", () => go("accounts")],
       ],
     },
     {
       title: "账本与预算",
       items: [
+        ["books", "账本流水", "查看三本账与流水明细", () => go("books")],
         ["ledgers", "账本配置", "新建、编辑、封面与删除", () => openSettings("ledgers")],
-        ["budget", "预算", "给这个月画一条温柔的线", () => go("budget")],
+        ["budget", "预算", "给这个月设一条提醒线", () => go("budget")],
         ["biz", "经营副业", "副业收支与毛利单独一本账", () => go("biz")],
       ],
     },
@@ -835,60 +857,206 @@ function CalendarPage({ token, me, show, go }) {
 
 function Home({ token, me, go }) {
   const [dash, setDash] = useState(null);
+  const [accounts, setAccounts] = useState([]);
+  const [q, setQ] = useState("");
+
   useEffect(() => {
     api("/api/v1/dashboard", { token }).then(setDash);
+    api("/api/v1/accounts", { token }).then(setAccounts).catch(() => setAccounts([]));
   }, [token]);
+
   if (!dash) return <p className="muted">正在打开账本…</p>;
+
+  const budgetTotal = (dash.budgets || []).reduce((s, b) => s + (b.amount || 0), 0);
+  const budgetSpent = (dash.budgets || []).reduce((s, b) => s + (b.spent || 0), 0);
+  const budgetLeft = Math.max(0, budgetTotal - budgetSpent);
+  const budgetPct = budgetTotal > 0 ? Math.min(100, Math.round((budgetSpent / budgetTotal) * 100)) : 0;
+  const recent = (dash.recent || []).filter((t) => {
+    if (!q.trim()) return true;
+    const hay = `${t.note || ""}${t.category_name || ""}${t.ledger_name || ""}`.toLowerCase();
+    return hay.includes(q.trim().toLowerCase());
+  });
+
   return (
-    <>
-      <div className="topbar">
+    <div className="home-page">
+      <div className="home-head">
         <div>
-          <h2 className="hello">
-            <span className="hello-full">{me?.user.display_name}，本月家底一目了然</span>
-            <span className="hello-short">{me?.user.display_name}</span>
-          </h2>
+          <div className="who">
+            {me?.user.display_name}
+            <small>{me?.household?.name}</small>
+          </div>
           <p className="sub">
-            {dash.period.year} 年 {dash.period.month} 月 · 生活账与经营账分开记
+            {dash.period.year} 年 {dash.period.month} 月 · {BRAND_NAME} 家庭账本
           </p>
         </div>
-        <button className="btn desktop-only" onClick={() => go("add")}>
-          记一笔
-        </button>
+        <div className="home-acts">
+          <button type="button" className="icon-chip" onClick={() => go("budget")} aria-label="预算">
+            ◎
+          </button>
+          <button type="button" className="icon-chip" onClick={() => go("me")} aria-label="我的">
+            ✎
+          </button>
+        </div>
       </div>
 
-      <section className="balance-hero" aria-label="本月家庭结余">
-        <p className="balance-kicker">
-          {dash.period.year} 年 {dash.period.month} 月 · 家庭结余
-        </p>
-        <p className="balance-figure">¥ {money(dash.family.balance)}</p>
-        <div className="balance-split">
-          <div>
+      <label className="search-bar">
+        <span aria-hidden>⌕</span>
+        <input
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="搜索账单、类目、备注…"
+        />
+      </label>
+
+      <div className="kv-row">
+        <div className="kv-card">
+          <div className="kl">本月结余</div>
+          <div className="kv">¥ {money(dash.family.balance)}</div>
+        </div>
+        <div className="kv-card">
+          <div className="kl">本月已记支出</div>
+          <div className="kv down">¥ {money(dash.family.expense)}</div>
+        </div>
+      </div>
+
+      <section className="today-hero" aria-label="本月概况">
+        <div className="lbl">
+          <span className="dot" aria-hidden>
+            ¥
+          </span>
+          <span>
+            {dash.period.month} 月家庭概况
+            {budgetTotal > 0 ? ` · 预算已用 ${budgetPct}%` : ""}
+          </span>
+        </div>
+        <div className="amt">¥ {money(dash.family.balance)}</div>
+        <div className="grid">
+          <div className="g-cell">
             <span>收入</span>
-            <strong className="pos">¥ {money(dash.family.income)}</strong>
+            <b className="up">¥ {money(dash.family.income)}</b>
           </div>
-          <div>
+          <div className="g-cell">
             <span>支出</span>
-            <strong className="neg">¥ {money(dash.family.expense)}</strong>
+            <b className="down">¥ {money(dash.family.expense)}</b>
           </div>
-          <div>
+          <div className="g-cell">
             <span>副业毛利</span>
-            <strong>¥ {money(dash.business.profit)}</strong>
+            <b>¥ {money(dash.business.profit)}</b>
           </div>
         </div>
       </section>
 
-      <div className="row two">
+      {budgetTotal > 0 && (
+        <div className="card month-card">
+          <div className="ring" aria-hidden>
+            <svg width="74" height="74" viewBox="0 0 74 74">
+              <circle cx="37" cy="37" r="30" fill="none" stroke="var(--line)" strokeWidth="8" />
+              <circle
+                cx="37"
+                cy="37"
+                r="30"
+                fill="none"
+                stroke="var(--brand-d)"
+                strokeWidth="8"
+                strokeLinecap="round"
+                strokeDasharray={`${(budgetPct / 100) * 188.4} 188.4`}
+                transform="rotate(-90 37 37)"
+              />
+            </svg>
+            <div className="ct">
+              <b>{budgetPct}%</b>
+              预算
+            </div>
+          </div>
+          <div className="month-cols">
+            <div className="m-col">
+              <span>预算总额</span>
+              <b>¥ {money(budgetTotal)}</b>
+            </div>
+            <div className="m-col">
+              <span>已花费</span>
+              <b className="down">¥ {money(budgetSpent)}</b>
+            </div>
+            <div className="m-col">
+              <span>剩余</span>
+              <b className="up">¥ {money(budgetLeft)}</b>
+            </div>
+            <div className="m-col">
+              <span>家庭结余</span>
+              <b>¥ {money(dash.family.balance)}</b>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="card acct-strip">
+        <div className="h-row">
+          <span className="t">我的账户</span>
+          <button type="button" className="more" onClick={() => go("accounts")}>
+            全部
+          </button>
+        </div>
+        {accounts.slice(0, 3).map((a) => (
+          <div className="acct-item" key={a.id}>
+            <div className="acct-ic" style={{ background: "var(--brand-d)" }}>
+              {a.name.slice(0, 1)}
+            </div>
+            <div>
+              <div className="an">{a.name}</div>
+              <div className="as">{accountKindLabel(a.kind)}</div>
+            </div>
+            <div className="abal">
+              <b>¥ {money(a.opening_balance)}</b>
+              <small>期初</small>
+            </div>
+          </div>
+        ))}
+        {accounts.length === 0 && <p className="muted">还没有账户，去「账户」页添加。</p>}
+      </div>
+
+      <div className="quick-grid">
+        {[
+          ["calendar", "日历", "▦", "var(--brand)"],
+          ["accounts", "账户", "▣", "var(--teal)"],
+          ["books", "账本", "☰", "var(--amber)"],
+          ["budget", "预算", "◎", "var(--blue)"],
+        ].map(([id, label, icon, bg]) => (
+          <button key={id} type="button" className="quick-cell" onClick={() => go(id)}>
+            <span className="qi" style={{ background: bg }}>
+              {icon}
+            </span>
+            <span>{label}</span>
+          </button>
+        ))}
+      </div>
+
+      <div className="card">
+        <div className="h-row" style={{ padding: "14px 16px 0" }}>
+          <span className="t">最近账单</span>
+          <button type="button" className="more" onClick={() => go("books")}>
+            更多
+          </button>
+        </div>
+        <div className="list" style={{ paddingBottom: 8 }}>
+          {recent.map((t) => (
+            <TxRow key={t.id} t={t} />
+          ))}
+          {recent.length === 0 && <div className="empty-state" style={{ margin: 12 }}>暂无匹配账单</div>}
+        </div>
+      </div>
+
+      <div className="row two" style={{ marginTop: 4 }}>
         <div className="card">
           <h3>近半年家庭收支</h3>
           <div className="chart-box">
             <ResponsiveContainer>
               <AreaChart data={dash.trend}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(22,25,31,0.08)" />
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(70,55,110,0.08)" />
                 <XAxis dataKey="label" />
                 <YAxis />
                 <Tooltip />
-                <Area type="monotone" dataKey="income" stroke="#2F6F5E" fill="#D7E8E1" name="收入" />
-                <Area type="monotone" dataKey="expense" stroke="#B91C1C" fill="#F0D9D6" name="支出" />
+                <Area type="monotone" dataKey="income" stroke="#8F6FD6" fill="#E8D9FA" name="收入" />
+                <Area type="monotone" dataKey="expense" stroke="#E07070" fill="#FFD6D6" name="支出" />
               </AreaChart>
             </ResponsiveContainer>
           </div>
@@ -909,45 +1077,67 @@ function Home({ token, me, go }) {
           </div>
         </div>
       </div>
-      <div className="row two" style={{ marginTop: 16 }}>
-        <div className="card">
-          <h3>每位家人的个人开销</h3>
-          {dash.members.map((m) => (
-            <div className="member-pill" key={m.user_id}>
-              <span className="member-pill-name">
-                <UserAvatar user={m} size={24} />
-                {m.display_name}
-              </span>
-              <strong>¥ {money(m.expense)}</strong>
-            </div>
-          ))}
-          <p className="muted">公共账本开支不拆到个人，记在家庭公共。</p>
+    </div>
+  );
+}
+
+function AccountsHome({ token, me, show, openSettings }) {
+  const [wallets, setWallets] = useState([]);
+  const [dash, setDash] = useState(null);
+
+  useEffect(() => {
+    api("/api/v1/accounts", { token }).then(setWallets).catch((e) => show(e.message));
+    api("/api/v1/dashboard", { token }).then(setDash).catch(() => {});
+  }, [token, show]);
+
+  const totalOpening = wallets.reduce((s, w) => s + (w.opening_balance || 0), 0);
+
+  return (
+    <div className="accounts-home">
+      <div className="page-head">
+        <div>
+          <h2 className="hello">我的账户</h2>
+          <p className="sub">{me?.user.display_name} · 资产独立管理</p>
         </div>
-        <div className="card">
-          <h3>预算进度</h3>
-          {dash.budgets.length === 0 && <p className="muted">还没有预算，去「预算」页设一笔。</p>}
-          {dash.budgets.map((b) => (
-            <div key={b.id} style={{ marginBottom: 12 }}>
-              <div style={{ display: "flex", justifyContent: "space-between" }}>
-                <span>{b.category_name}</span>
-                <span className="muted">
-                  {money(b.spent)} / {money(b.amount)}
-                </span>
-              </div>
-              <div className={`budget-bar ${b.ratio > 0.85 ? "warn" : ""}`}>
-                <span style={{ width: `${Math.min(100, b.ratio * 100)}%` }} />
-              </div>
-            </div>
-          ))}
-          <h3>最近入账</h3>
-          <div className="list">
-            {dash.recent.map((t) => (
-              <TxRow key={t.id} t={t} />
-            ))}
+        <button type="button" className="btn" onClick={() => openSettings("wallets")}>
+          管理
+        </button>
+      </div>
+
+      <div className="asset-hero">
+        <div className="kl">资产合计（期初）</div>
+        <div className="kv">¥ {money(totalOpening)}</div>
+        <div className="asset-split">
+          <div>
+            <span>本月支出</span>
+            <b>¥ {money(dash?.family?.expense || 0)}</b>
+          </div>
+          <div>
+            <span>本月收入</span>
+            <b>¥ {money(dash?.family?.income || 0)}</b>
           </div>
         </div>
       </div>
-    </>
+
+      <div className="card acct-strip">
+        {wallets.map((w) => (
+          <div className="acct-item" key={w.id}>
+            <div className="acct-ic" style={{ background: "linear-gradient(135deg,var(--brand-d),#a884e8)" }}>
+              {w.name.slice(0, 1)}
+            </div>
+            <div>
+              <div className="an">{w.name}</div>
+              <div className="as">{accountKindLabel(w.kind)}</div>
+            </div>
+            <div className="abal">
+              <b>¥ {money(w.opening_balance)}</b>
+              <small>期初余额</small>
+            </div>
+          </div>
+        ))}
+        {wallets.length === 0 && <div className="empty-state">还没有资金账户，点右上角「管理」添加。</div>}
+      </div>
+    </div>
   );
 }
 
