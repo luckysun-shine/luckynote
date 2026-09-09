@@ -167,14 +167,70 @@ const NAV = [
 ];
 
 const TABS = [
-  { id: "home", label: "首页", icon: "⌂" },
-  { id: "calendar", label: "日历", icon: "▦" },
-  { id: "add", label: "记一笔", icon: "+", fab: true },
-  { id: "accounts", label: "账户", icon: "▣" },
-  { id: "me", label: "我的", icon: "☺" },
+  { id: "home", label: "首页", icon: "home" },
+  { id: "calendar", label: "日历", icon: "calendar" },
+  { id: "add", label: "记一笔", icon: "plus", fab: true },
+  { id: "accounts", label: "账户", icon: "wallet" },
+  { id: "me", label: "我的", icon: "me" },
 ];
 
 const ME_PAGES = ["me", "more", "budget", "settings", "books", "backup", "ai", "biz", "family"];
+
+function TabIcon({ name }) {
+  const common = {
+    width: 22,
+    height: 22,
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: "1.8",
+    strokeLinecap: "round",
+    strokeLinejoin: "round",
+    "aria-hidden": true,
+  };
+  if (name === "home") {
+    return (
+      <svg {...common}>
+        <path d="M4 11l8-7 8 7" />
+        <path d="M6 10v10h12V10" />
+      </svg>
+    );
+  }
+  if (name === "calendar") {
+    return (
+      <svg {...common}>
+        <rect x="4" y="5" width="16" height="15" rx="3" />
+        <path d="M4 9h16M8 3v4M16 3v4" />
+        <path d="M8.5 13.5l2 2 4-4" />
+      </svg>
+    );
+  }
+  if (name === "wallet") {
+    return (
+      <svg {...common}>
+        <path d="M3 9h18v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V9z" />
+        <path d="M3 9l2.2-3.5A2 2 0 0 1 6.9 4.5h10.2a2 2 0 0 1 1.7.95L21 9" />
+        <circle cx="16.5" cy="14.5" r="1.2" fill="currentColor" stroke="none" />
+      </svg>
+    );
+  }
+  if (name === "me") {
+    return (
+      <svg {...common}>
+        <circle cx="12" cy="8" r="4" />
+        <path d="M4.5 20c1.5-3.5 4.5-5 7.5-5s6 1.5 7.5 5" />
+      </svg>
+    );
+  }
+  if (name === "plus") {
+    return (
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden>
+        <path d="M12 5v14M5 12h14" />
+      </svg>
+    );
+  }
+  return null;
+}
 
 const WEEKDAYS = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"];
 
@@ -325,9 +381,9 @@ export default function App() {
               onClick={() => (tab.fab ? openAdd() : go(tab.id))}
             >
               <span className="tab-icon" aria-hidden="true">
-                {tab.icon}
+                <TabIcon name={tab.icon} />
               </span>
-              <span>{tab.label}</span>
+              <span className="tab-label">{tab.label}</span>
             </button>
           );
         })}
