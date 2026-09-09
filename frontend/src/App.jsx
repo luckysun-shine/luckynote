@@ -220,7 +220,7 @@ export default function App() {
       </header>
       <aside className="sider">
         <button type="button" className="brand brand-clickable" onClick={() => openSettings("profile")}>
-          <img className="brand-logo" src="/brand/luckynest-mark.png" alt="" width="52" height="52" />
+          <img className="brand-logo" src="/brand/luckynest-mark.svg" alt="" width="52" height="52" />
           <div>
             <h1 className="brand-cn">{BRAND_NAME}</h1>
             <p>家庭账本 · 幸运记账</p>
@@ -343,7 +343,7 @@ function Login({ onLogin, show, toast }) {
     <div className="login-wrap">
       <div className="login-stage">
         <header className="login-hero">
-          <img className="login-mark" src="/brand/luckynest-logo.jpg" alt="luckynest" width="88" height="88" />
+          <img className="login-mark" src="/brand/luckynest-mark.svg" alt="luckynest" width="88" height="88" />
           <h1 className="brand-cn login-brand">{BRAND_NAME}</h1>
           <p className="login-tagline">{BRAND_TAGLINE}</p>
         </header>

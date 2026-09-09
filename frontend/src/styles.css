@@ -887,10 +887,21 @@ textarea {
 .login-mark {
   width: 88px;
   height: 88px;
-  border-radius: 24px;
-  object-fit: cover;
-  box-shadow: 0 12px 28px -8px rgba(143, 111, 214, 0.45);
+  border-radius: 22px;
+  object-fit: contain;
+  background: transparent;
+  box-shadow: none;
   animation: login-float 5.2s ease-in-out infinite;
+}
+
+.brand-logo {
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  object-fit: contain;
+  background: transparent;
+  flex-shrink: 0;
+  box-shadow: none;
 }
 
 .login-brand {
@@ -2007,15 +2018,6 @@ textarea {
 }
 
 /* ===== luckynest prototype surfaces ===== */
-.brand-logo {
-  width: 52px;
-  height: 52px;
-  border-radius: 16px;
-  object-fit: cover;
-  flex-shrink: 0;
-  box-shadow: var(--shadow);
-}
-
 .home-head {
   display: flex;
   align-items: flex-start;
