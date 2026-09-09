@@ -971,26 +971,6 @@ function Home({ token, me, go, show }) {
 
   return (
     <div className="home-page">
-      <div className="home-head">
-        <div>
-          <div className="who">
-            {me?.user.display_name}
-            <small>{me?.household?.name}</small>
-          </div>
-          <p className="sub">
-            {dash.period.year} 年 {dash.period.month} 月 · {BRAND_NAME} 家庭账本
-          </p>
-        </div>
-        <div className="home-acts">
-          <button type="button" className="icon-chip" onClick={() => go("budget")} aria-label="预算">
-            ◎
-          </button>
-          <button type="button" className="icon-chip" onClick={() => go("me")} aria-label="我的">
-            ●
-          </button>
-        </div>
-      </div>
-
       <label className="search-bar">
         <span aria-hidden>⌕</span>
         <input
