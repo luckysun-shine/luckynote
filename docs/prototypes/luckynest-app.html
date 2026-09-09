@@ -1,0 +1,1124 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>luckynest 记账 APP 原型</title>
+<style>
+  :root{
+    --bg:#f7f5fc; --card:#ffffff; --ink:#262038; --ink2:#6e6485; --ink3:#a79cc0;
+    --line:#efeaf6; --brand:#c8a4f0; --brand-d:#8f6fd6; --brand-l:#f3edfc;
+    --teal:#c1e7dc; --amber:#ffd98a; --red:#ff9d9d; --blue:#b8d4f0; --purple:#dcc9f0;
+    --shadow:0 6px 22px -12px rgba(70,55,110,.20), 0 2px 6px rgba(70,55,110,.06);
+    --sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","PingFang SC","Helvetica Neue","Microsoft YaHei",sans-serif;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html{font-size:15px}
+  body{font-family:var(--sans);background:
+      radial-gradient(900px 500px at 80% -10%,rgba(255,179,205,.16),transparent 55%),
+      radial-gradient(700px 400px at -10% 110%,rgba(184,212,240,.14),transparent 55%),
+      #f0efec;
+    min-height:100vh;display:grid;place-items:center;padding:24px 12px;color:var(--ink);}
+  ::-webkit-scrollbar{width:0;height:0}
+
+  /* ===== iPhone 外框 ===== */
+  .phone{
+    width:390px;height:844px;border-radius:54px;background:#0c0f0d;padding:12px;
+    box-shadow:0 0 0 2px #232725, 0 30px 80px -20px rgba(92,66,42,.45);position:relative;flex:none;
+  }
+  .phone::before{content:"";position:absolute;left:50%;transform:translateX(-50%);top:24px;width:118px;height:32px;background:#0c0f0d;border-radius:20px;z-index:60}
+  .phone::after{content:"";position:absolute;left:50%;transform:translateX(-50%);top:35px;width:74px;height:8px;background:#1a1f1c;border-radius:6px;z-index:61}
+  .screen{
+    width:100%;height:100%;border-radius:44px;overflow:hidden;background:var(--bg);position:relative;
+    display:flex;flex-direction:column;
+  }
+  .statusbar{height:54px;flex:none;display:flex;align-items:flex-end;justify-content:space-between;padding:0 30px 8px;font-size:.78rem;font-weight:600;position:relative;z-index:55;color:var(--ink)}
+  .statusbar .l,.statusbar .r{display:flex;gap:5px;align-items:center}
+  .statusbar .l i{width:17px;height:10px;border-radius:3px;border:1.5px solid var(--ink);position:relative}
+  .statusbar .l i::after{content:"";position:absolute;inset:2px;border-radius:1.5px;background:var(--ink)}
+
+  .app{flex:1;min-height:0;display:flex;flex-direction:column;position:relative}
+  .views{flex:1;min-height:0;overflow-y:auto;padding:0 18px 100px;scroll-behavior:smooth}
+  .views::-webkit-scrollbar{display:none}
+
+  /* ===== 通用 ===== */
+  .nav-title{font-size:1.28rem;font-weight:700;padding:6px 0 2px}
+  .nav-sub{font-size:.8rem;color:var(--ink3);padding-bottom:12px}
+  .card{background:var(--card);border-radius:18px;box-shadow:var(--shadow);margin-bottom:14px;overflow:hidden}
+  .card-pad{padding:16px}
+  .h-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+  .h-row .t{font-size:.86rem;font-weight:600;color:var(--ink2)}
+  .h-row .more{font-size:.76rem;color:var(--brand);font-weight:600;background:none;border:none;cursor:pointer}
+  .up{color:var(--brand)} .down{color:var(--red)} .up-bg{color:var(--brand-d)}
+  .money{font-variant-numeric:tabular-nums;font-weight:700}
+
+  /* ===== luckynest 品牌 Logo(SVG 内联) ===== */
+  .ln-logo{width:40px;height:40px;flex:none;filter:drop-shadow(0 3px 6px rgba(70,55,110,.22))}
+  .ln-logo.sm{width:30px;height:30px}
+  .ln-logo.lg{width:64px;height:64px;margin-bottom:14px}
+
+  /* ===== 首屏 ===== */
+  .splash{position:absolute;inset:0;background:linear-gradient(170deg,#fff 0%,#fff7f9 55%,#f4f6fb 100%);z-index:90;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:0 26px;transition:opacity .35s}
+  .splash.hide{opacity:0;pointer-events:none}
+  .logo{width:62px;height:62px;border-radius:50%;background:var(--brand);display:grid;place-items:center;font-size:1.5rem;color:#fff;font-weight:800;box-shadow:0 12px 26px -8px rgba(255,111,174,.45);margin-bottom:14px}
+  .splash h1{font-size:1.5rem;letter-spacing:.02em}
+  .splash .tag{font-size:.82rem;color:var(--ink2);margin:6px 0 26px;text-align:center;line-height:1.7}
+  .member-card{width:100%;display:flex;align-items:center;gap:14px;background:#fff;border-radius:20px;padding:16px;margin-bottom:12px;box-shadow:var(--shadow);border:1px solid rgba(0,0,0,.04);cursor:pointer;transition:transform .12s}
+  .member-card:active{transform:scale(.97)}
+  .avatar{width:46px;height:46px;border-radius:50%;display:grid;place-items:center;font-weight:700;color:#fff;font-size:1.05rem;flex:none}
+  .member-card .info{flex:1}
+  .member-card .nm{font-weight:700;font-size:1rem}
+  .member-card .role{font-size:.74rem;color:var(--ink3);margin-top:2px}
+  .member-card .stat{font-size:.76rem;color:var(--ink2);margin-top:6px}
+  .member-card .chev{color:var(--ink3)}
+  .splash .add{width:100%;padding:13px;border-radius:16px;border:1.5px dashed var(--ink3);background:transparent;color:var(--ink2);font-size:.86rem;margin-top:6px;cursor:pointer}
+  .splash .foot{margin-top:20px;font-size:.7rem;color:var(--ink3)}
+
+  /* ===== 登录表单 ===== */
+  .login{width:100%;max-width:300px;margin-top:2px}
+  .login-tab{display:flex;background:var(--brand-l);border-radius:12px;padding:3px;margin-bottom:14px}
+  .ltab{flex:1;text-align:center;padding:8px 0;font-size:.8rem;font-weight:600;border:none;background:none;border-radius:10px;color:var(--ink2);font-family:inherit;cursor:pointer}
+  .ltab.active{background:#fff;color:var(--brand-d);box-shadow:0 1px 4px rgba(70,55,110,.1)}
+  .l-field{display:flex;align-items:center;gap:9px;background:var(--bg);border:1px solid var(--line);border-radius:14px;padding:12px 13px;margin-bottom:11px}
+  .l-field:focus-within{border-color:var(--brand);background:#fff;box-shadow:0 0 0 3px rgba(200,164,240,.2)}
+  .l-field .l-ic{font-size:.95rem;color:var(--ink3)}
+  .l-field input{flex:1;border:none;background:none;font-size:.86rem;font-family:inherit;color:var(--ink);outline:none}
+  .l-field input::placeholder{color:var(--ink3)}
+  .l-eye{border:none;background:none;font-size:.9rem;cursor:pointer;padding:2px;opacity:.75}
+  .l-code{display:flex;gap:8px;margin-bottom:11px}
+  .code-btn{flex:none;background:var(--brand-l);color:var(--brand-d);border:none;border-radius:14px;padding:0 13px;font-size:.76rem;font-weight:600;cursor:pointer;font-family:inherit}
+  .code-btn:disabled{opacity:.5}
+  .l-row{display:flex;align-items:center;justify-content:space-between;margin:2px 2px 16px;font-size:.74rem;color:var(--ink2)}
+  .l-rem{display:flex;align-items:center;gap:5px;cursor:pointer}
+  .l-rem input{accent-color:var(--brand-d)}
+  .l-forgot{color:var(--brand-d);font-weight:600;background:none;border:none;cursor:pointer}
+  .l-login{width:100%;padding:14px;border:none;border-radius:16px;background:linear-gradient(135deg,var(--brand-d),#a884e8);color:#fff;font-size:.95rem;font-weight:700;cursor:pointer;font-family:inherit;box-shadow:0 10px 22px -8px rgba(143,111,214,.6)}
+  .l-login:active{transform:scale(.97)}
+  .l-reg{width:100%;padding:12px;border:none;background:none;color:var(--ink2);font-size:.78rem;cursor:pointer;font-family:inherit;margin-top:6px}
+  .l-reg b{color:var(--brand-d)}
+  .l-demo{margin-top:14px;font-size:.68rem;color:var(--ink3);text-align:center;background:var(--brand-l);border-radius:10px;padding:7px 10px}
+  .l-demo b{color:var(--brand-d)}
+
+  /* ===== 首页 ===== */
+  .home-head{display:flex;align-items:center;justify-content:space-between;padding:8px 0 2px}
+  .home-head .who{font-weight:800;font-size:1.2rem}
+  .home-head .who small{color:var(--ink3);font-weight:500;margin-left:4px;font-size:.72rem}
+  .home-head .acts{display:flex;gap:10px}
+  .icon-chip{width:34px;height:34px;border-radius:50%;background:#fff;box-shadow:var(--shadow);display:grid;place-items:center;font-size:.95rem;border:none;cursor:pointer}
+  .search-bar{display:flex;align-items:center;gap:8px;background:#f2f1ee;border-radius:14px;padding:11px 14px;margin:10px 0 16px;color:var(--ink3);font-size:.84rem}
+  .today-hero{background:#fff;border-radius:22px;padding:18px 18px 16px;color:var(--ink);border:1px solid rgba(0,0,0,.04);box-shadow:var(--shadow);margin-bottom:14px}
+  .today-hero .lbl{font-size:.78rem;color:var(--ink2);display:flex;align-items:center;gap:6px}
+  .today-hero .lbl .dot{width:34px;height:34px;border-radius:50%;background:var(--brand);display:grid;place-items:center;font-size:.9rem;flex:none}
+  .today-hero .amt{font-size:1.7rem;font-weight:800;letter-spacing:-.01em;margin:8px 0 12px;font-variant-numeric:tabular-nums}
+  .today-hero .grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;position:relative;z-index:2}
+  .today-hero .g-cell{background:var(--bg);border-radius:12px;padding:8px 9px}
+  .today-hero .g-cell b{display:block;font-size:.86rem;font-weight:700}
+  .today-hero .g-cell span{font-size:.68rem;color:var(--ink3)}
+  .month-card{display:flex;align-items:center;gap:16px;padding:16px}
+  .ring{position:relative;width:74px;height:74px;flex:none}
+  .ring svg{transform:rotate(-90deg)}
+  .ring .ct{position:absolute;inset:0;display:grid;place-items:center;font-size:.66rem;color:var(--ink3)}
+  .ring .ct b{display:block;font-size:.92rem;color:var(--ink);font-variant-numeric:tabular-nums}
+  .month-cols{flex:1;display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .m-col{background:var(--bg);border-radius:12px;padding:9px 10px}
+  .m-col b{font-size:.92rem;font-variant-numeric:tabular-nums}
+  .m-col span{font-size:.68rem;color:var(--ink3)}
+  .m-col small{display:block;font-size:.72rem;margin-top:1px}
+  .acct-strip{padding:14px 16px}
+  .acct-item{display:flex;align-items:center;gap:11px;padding:9px 0;border-bottom:1px solid var(--line)}
+  .acct-item:last-child{border-bottom:none;padding-bottom:0}
+  .acct-ic{width:38px;height:38px;border-radius:50%;display:grid;place-items:center;color:#fff;font-size:.85rem;flex:none}
+  .acct-item .an{font-size:.86rem;font-weight:600}
+  .acct-item .as{font-size:.7rem;color:var(--ink3)}
+  .acct-item .abal{margin-left:auto;text-align:right}
+  .acct-item .abal b{font-size:.9rem}
+  .acct-item .abal small{display:block;font-size:.68rem;color:var(--ink3)}
+  .tx-item{display:flex;align-items:center;gap:11px;padding:11px 16px;border-bottom:1px solid var(--line)}
+  .tx-item:last-child{border-bottom:none}
+  .tx-ic{width:38px;height:38px;border-radius:50%;display:grid;place-items:center;font-size:.95rem;flex:none}
+  .tx-item .tn{font-size:.86rem;font-weight:600}
+  .tx-item .ts{font-size:.7rem;color:var(--ink3);margin-top:2px}
+  .tx-item .tamt{margin-left:auto;font-weight:700;font-size:.9rem;font-variant-numeric:tabular-nums}
+  .quick-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;padding:16px}
+  .quick-cell{display:flex;flex-direction:column;align-items:center;gap:6px;background:#fff;border-radius:14px;padding:12px 4px;cursor:pointer;border:none;font-family:inherit}
+  .quick-cell .qi{width:46px;height:46px;border-radius:50%;display:grid;place-items:center;font-size:1.15rem;background:var(--brand)}
+  .quick-cell:nth-child(2) .qi{background:var(--teal)}
+  .quick-cell:nth-child(3) .qi{background:var(--amber)}
+  .quick-cell:nth-child(4) .qi{background:var(--blue)}
+  .quick-cell span{font-size:.7rem;color:var(--ink2);font-weight:600}
+  .quick-cell:active{transform:scale(.94)}
+  .member-badge{display:inline-flex;align-items:center;gap:5px;font-size:.7rem;color:var(--ink2);background:var(--bg);border-radius:999px;padding:3px 9px;margin-left:6px}
+  .kv-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px}
+  .kv-card{background:#fff;border-radius:20px;padding:14px 16px;border:1px solid rgba(0,0,0,.04);box-shadow:var(--shadow)}
+  .kv-card .kl{font-size:.7rem;color:var(--ink3);display:flex;align-items:center;gap:6px}
+  .kv-card .kv{margin-top:6px;font-size:1.05rem;font-weight:800;font-variant-numeric:tabular-nums}
+  .kv-card .kv.g{color:var(--teal-d, #2e9e78)}
+  .kv-card .kv.b{color:var(--blue-d, #3d76b4)}
+
+  /* ===== 底部 TabBar ===== */
+  .tabbar{position:absolute;bottom:0;left:0;right:0;background:rgba(255,255,255,.92);backdrop-filter:blur(20px);border-top:1px solid rgba(230,234,228,.8);display:flex;align-items:stretch;height:76px;padding-bottom:env(safe-area-inset-bottom);z-index:40}
+  .tab{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;border:none;background:none;font-family:inherit;color:var(--ink3);font-size:.64rem;cursor:pointer;padding-top:8px}
+  .tab .ti{font-size:1.18rem;line-height:1;transition:transform .12s}
+  .tab.active{color:var(--brand);font-weight:600}
+  .tab.active .ti{transform:translateY(-1px)}
+  .tab-add{position:relative;flex:1;display:grid;place-items:center;border:none;background:none;cursor:pointer;padding-top:6px}
+  .tab-add .fab{width:52px;height:52px;border-radius:50%;background:#111;color:#fff;font-size:1.5rem;display:grid;place-items:center;box-shadow:0 10px 22px -6px rgba(0,0,0,.4);margin-top:-26px;font-weight:300}
+  .tab-add span{font-size:.64rem;color:var(--ink3);margin-top:1px}
+
+  /* ===== 记账底部弹层 ===== */
+  .sheet-mask{position:absolute;inset:0;background:rgba(15,22,18,.42);z-index:80;display:flex;align-items:flex-end;opacity:0;pointer-events:none;transition:opacity .25s}
+  .sheet-mask.show{opacity:1;pointer-events:auto}
+  .sheet{width:100%;background:#fafbf9;border-radius:26px 26px 0 0;padding:12px 20px 18px;max-height:92%;overflow-y:auto;transform:translateY(30px);transition:transform .28s cubic-bezier(.32,.72,.35,1)}
+  .sheet-mask.show .sheet{transform:translateY(0)}
+  .sheet::-webkit-scrollbar{display:none}
+  .grab{width:38px;height:4px;border-radius:2px;background:#d7ddd7;margin:0 auto 10px}
+  .type-tabs{display:flex;background:var(--bg);border-radius:12px;padding:3px;margin-bottom:14px}
+  .type-tab{flex:1;text-align:center;padding:8px 0;font-size:.86rem;font-weight:600;border:none;background:none;border-radius:10px;color:var(--ink2);font-family:inherit;cursor:pointer}
+  .type-tab.active{background:#fff;color:var(--ink);box-shadow:0 1px 4px rgba(92,66,42,.08)}
+  .amt-box{display:flex;align-items:baseline;gap:6px;padding:6px 2px 12px}
+  .amt-box .cny{font-size:1.3rem;font-weight:700}
+  .amt-box .amt{font-size:2.3rem;font-weight:800;font-variant-numeric:tabular-nums;min-height:2.6rem}
+  .amt-box .amt.ph{color:var(--ink3)}
+  .f-label{font-size:.74rem;color:var(--ink2);font-weight:600;display:block;margin-bottom:8px}
+  .cats{display:grid;grid-template-columns:repeat(5,1fr);gap:4px 2px;margin-bottom:14px}
+  .cat{display:flex;flex-direction:column;align-items:center;gap:4px;padding:7px 0;border:none;background:none;border-radius:12px;cursor:pointer;font-family:inherit;font-size:.66rem;color:var(--ink2)}
+  .cat .ci{width:40px;height:40px;border-radius:14px;background:var(--bg);display:grid;place-items:center;font-size:1.05rem;transition:transform .1s}
+  .cat.active .ci{background:var(--brand-l);transform:scale(1.06)}
+  .cat.active{color:var(--brand-d);font-weight:600}
+  .acct-scroll{display:flex;gap:8px;overflow-x:auto;padding-bottom:4px;margin-bottom:12px}
+  .acct-scroll::-webkit-scrollbar{display:none}
+  .acct-chip{flex:none;display:flex;align-items:center;gap:6px;background:var(--bg);border-radius:999px;padding:7px 12px;font-size:.76rem;color:var(--ink2);border:none;cursor:pointer;font-family:inherit}
+  .acct-chip.active{background:var(--brand);color:#fff;font-weight:600}
+  .acct-chip .dot{width:8px;height:8px;border-radius:50%}
+  .nt-row{display:flex;gap:10px;margin-bottom:14px}
+  .nt-row input{flex:1;background:var(--bg);border:none;border-radius:12px;padding:11px 13px;font-size:.84rem;font-family:inherit;color:var(--ink);outline:none}
+  .kbd{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:4px}
+  .kbd button{height:50px;border-radius:14px;border:none;background:var(--card);font-size:1.15rem;font-weight:600;font-family:inherit;box-shadow:0 1px 3px rgba(92,66,42,.06);cursor:pointer}
+  .kbd button:active{transform:scale(.96);background:#eef1ec}
+  .kbd .del{font-size:.95rem;color:var(--ink2)}
+  .kbd .go{background:#111;color:#fff;font-size:.95rem}
+
+  /* ===== 日历 ===== */
+  .cal-head{display:flex;align-items:center;justify-content:space-between;padding:8px 0 2px}
+  .cal-head .ym{font-size:1.1rem;font-weight:700}
+  .cal-nav{display:flex;gap:6px}
+  .cal-nav button{width:30px;height:30px;border-radius:10px;border:none;background:var(--card);box-shadow:var(--shadow);font-size:.8rem;cursor:pointer}
+  .cal-filter{display:flex;gap:8px;margin:10px 0 12px}
+  .fchip{font-size:.72rem;padding:6px 13px;border-radius:999px;background:var(--card);border:none;color:var(--ink2);cursor:pointer;font-family:inherit;box-shadow:0 1px 3px rgba(92,66,42,.05)}
+  .fchip.active{background:var(--brand);color:#fff;font-weight:600}
+  .week{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:6px}
+  .week span{text-align:center;font-size:.68rem;color:var(--ink3);padding:4px 0}
+  .days{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+  .day{min-height:52px;border-radius:12px;background:var(--card);padding:5px 4px;display:flex;flex-direction:column;align-items:center;border:none;font-family:inherit;cursor:pointer;position:relative;transition:transform .1s}
+  .day:active{transform:scale(.95)}
+  .day.out{background:transparent;cursor:default}
+  .day .dnum{font-size:.78rem;font-weight:600;color:var(--ink)}
+  .day.today .dnum{background:var(--brand);color:#fff;border-radius:50%;width:22px;height:22px;display:grid;place-items:center}
+  .day .ex{font-size:.6rem;color:var(--red);font-weight:600;margin-top:2px;white-space:nowrap;font-variant-numeric:tabular-nums}
+  .day .in{font-size:.6rem;color:var(--brand);font-weight:600;font-variant-numeric:tabular-nums}
+  .day .hasdot{width:4px;height:4px;border-radius:50%;background:var(--teal);margin-top:1px}
+  .day.selected{outline:2px solid var(--brand);outline-offset:-1px}
+  .legend{display:flex;gap:16px;margin-top:12px;font-size:.68rem;color:var(--ink3)}
+  .legend i{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:4px}
+
+  /* ===== 账户 ===== */
+  .tot-card{background:linear-gradient(135deg,#3a2e26 0%,#54453a 100%);border-radius:22px;padding:18px;color:#fff;margin-bottom:14px}
+  .tot-card .lbl{font-size:.74rem;opacity:.75}
+  .tot-card .amt{font-size:1.65rem;font-weight:800;margin:4px 0 12px;font-variant-numeric:tabular-nums}
+  .tot-card .grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .tot-card .g{background:rgba(255,255,255,.1);border-radius:11px;padding:8px 10px}
+  .tot-card .g b{font-size:.86rem;display:block}
+  .tot-card .g span{font-size:.64rem;opacity:.75}
+  .acct-card{padding:14px 16px;display:flex;align-items:center;gap:12px}
+  .acct-card:not(:last-child){border-bottom:1px solid var(--line)}
+  .acct-card .an{font-size:.9rem;font-weight:700}
+  .acct-card .as{font-size:.7rem;color:var(--ink3);margin-top:2px}
+  .acct-card .abal{margin-left:auto;text-align:right}
+  .acct-card .abal b{font-size:.95rem}
+  .acct-card .abal small{display:block;font-size:.66rem;color:var(--ink3);margin-top:2px}
+  .cc-due{background:#fff3ea;border:1px solid #f6e3c8;border-radius:14px;padding:11px 14px;display:flex;align-items:center;gap:10px;margin:0 0 14px;font-size:.76rem;color:#a06a35}
+  .cc-due b{margin-left:auto;color:var(--amber)}
+
+  /* ===== 报表 ===== */
+  .rp-title{font-size:1.02rem;font-weight:700;margin-bottom:2px}
+  .rp-sub{font-size:.72rem;color:var(--ink3);margin-bottom:14px}
+  .bar-item{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+  .bar-item .bn{width:52px;font-size:.74rem;color:var(--ink2);flex:none}
+  .bar-item .btr{flex:1;height:20px;background:var(--bg);border-radius:6px;overflow:hidden;position:relative}
+  .bar-item .bfill{height:100%;border-radius:6px;min-width:4px;display:flex;align-items:center;justify-content:flex-end;padding-right:6px;font-size:.62rem;color:#fff;font-weight:600;font-variant-numeric:tabular-nums}
+  .bar-item .bpct{width:40px;text-align:right;font-size:.7rem;color:var(--ink2);font-variant-numeric:tabular-nums}
+  .trend{height:130px;display:flex;align-items:flex-end;gap:7px;padding:10px 4px 0}
+  .tcol{flex:1;display:flex;flex-direction:column;align-items:center;gap:5px}
+  .tcol .tb{width:100%;border-radius:6px 6px 3px 3px;background:linear-gradient(180deg,var(--teal),var(--brand));min-height:4px;position:relative}
+  .tcol .tv{font-size:.6rem;color:var(--ink2);font-variant-numeric:tabular-nums;white-space:nowrap}
+  .tcol .tm{font-size:.62rem;color:var(--ink3)}
+  .tcol.hi .tb{background:linear-gradient(180deg,#e0816f,var(--red))}
+  .cmp-row{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--line)}
+  .cmp-row:last-child{border-bottom:none}
+  .cmp-row .cn{flex:1;font-size:.84rem;font-weight:600;display:flex;align-items:center;gap:8px}
+  .cmp-row .camt{font-weight:700;font-size:.86rem;font-variant-numeric:tabular-nums}
+
+  /* ===== 我的 ===== */
+  .me-head{display:flex;align-items:center;gap:14px;padding:20px 16px}
+  .me-head .avatar{width:54px;height:54px;font-size:1.2rem}.avatar-edit{position:relative;cursor:pointer}.av-edit{position:absolute;right:-3px;bottom:-3px;width:20px;height:20px;border-radius:50%;background:var(--brand-d);color:#fff;display:grid;place-items:center;font-size:.62rem;border:2px solid #fff;box-shadow:var(--shadow)}
+  .me-head .mn{font-weight:700;font-size:1.05rem}
+  .me-head .ms{font-size:.74rem;color:var(--ink3);margin-top:2px}
+  .me-head .mswitch{margin-left:auto;font-size:.74rem;color:var(--brand);background:var(--brand-l);border:none;border-radius:999px;padding:7px 13px;font-weight:600;cursor:pointer;font-family:inherit}
+  .cell{display:flex;align-items:center;gap:12px;padding:14px 16px;border-bottom:1px solid var(--line);cursor:pointer;background:none;border-left:none;border-right:none;border-top:none;width:100%;font-family:inherit;font-size:.86rem;color:var(--ink);text-align:left}
+  .cell:last-child{border-bottom:none}
+  .cell .ci{width:34px;height:34px;border-radius:11px;background:var(--bg);display:grid;place-items:center;font-size:.9rem;flex:none}
+  .cell .ct{flex:1}
+  .cell .cs{font-size:.7rem;color:var(--ink3);margin-top:1px}
+  .cell .cv{color:var(--ink3);font-size:.76rem;margin-left:auto}
+  .cell .ch{color:var(--ink3)}
+
+  /* ===== 日概况弹层 ===== */
+  .day-head{display:flex;align-items:center;justify-content:space-between;padding:2px 0 12px}
+  .day-head .dt{font-size:1.05rem;font-weight:700}
+  .day-head .dw{font-size:.72rem;color:var(--ink3)}
+  .day-sum{display:flex;gap:8px;margin-bottom:12px}
+  .ds-cell{flex:1;background:var(--bg);border-radius:14px;padding:10px 12px}
+  .ds-cell b{display:block;font-size:.98rem;font-variant-numeric:tabular-nums}
+  .ds-cell span{font-size:.66rem;color:var(--ink3)}
+  .day-cat{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px}
+  .dc-tag{font-size:.7rem;background:var(--bg);border-radius:999px;padding:5px 10px;color:var(--ink2)}
+  .dc-tag b{color:var(--ink);margin-right:3px}
+
+  .toast{position:absolute;top:70px;left:50%;transform:translateX(-50%) translateY(-8px);background:rgba(92,66,42,.92);color:#fff;font-size:.76rem;padding:9px 18px;border-radius:999px;z-index:99;opacity:0;transition:all .25s;pointer-events:none;white-space:nowrap}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+  .pagehide{display:none}
+  @media(max-width:430px){
+    body{padding:0}
+    .phone{width:100vw;height:100vh;border-radius:0;padding:0}
+    .screen{border-radius:0}
+  }
+</style>
+</head>
+<body>
+
+<div class="phone">
+  <div class="screen">
+    <div class="statusbar">
+      <div class="l"><i></i> <span>09:41</span></div>
+      <div class="r"><span>5G</span> <span>▮▮▮</span> <span>🔋</span></div>
+    </div>
+
+    <!-- 登录首屏:完整账号密码登录 -->
+    <div class="splash" id="splash">
+      <svg class="ln-logo lg" viewBox="0 0 512 512" aria-label="luckynest 记账"><defs><linearGradient id="lnstH" x1="0.15" y1="0" x2="0.9" y2="1"><stop offset="0" stop-color="#F5A8D0"/><stop offset="0.55" stop-color="#C79DF0"/><stop offset="1" stop-color="#8F7FE0"/></linearGradient><linearGradient id="lnstR" x1="0.3" y1="0" x2="0.75" y2="1"><stop offset="0" stop-color="#F6A9D2"/><stop offset="1" stop-color="#9A86E6"/></linearGradient><linearGradient id="lnstN" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#C9A4F2"/><stop offset="1" stop-color="#9B7BE0"/></linearGradient><linearGradient id="lnstC" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFE9A8"/><stop offset="1" stop-color="#F2B64E"/></linearGradient></defs><rect x="104" y="200" width="304" height="252" rx="30" fill="url(#lnstH)"/><path d="M88 214 L256 74 L424 214 L424 232 L256 100 L88 232 Z" fill="url(#lnstR)"/><path d="M176 344 a80 80 0 0 0 160 0 l0 -18 a80 80 0 0 1 -160 0 Z" fill="url(#lnstN)"/><path d="M166 334 a90 90 0 0 0 180 0 Z" fill="none" stroke="#F0E3FF" stroke-width="6" opacity="0.7"/><circle cx="256" cy="322" r="52" fill="url(#lnstC)" stroke="#E8B25C" stroke-width="4"/><path d="M256 298 C243 309 232 321 232 331 C232 339 238 345 246 345 C252 345 255 342 256 340 C257 342 260 345 266 345 C274 345 280 339 280 331 C280 321 269 309 256 298Z" fill="#E8627A"/><rect x="434" y="258" width="40" height="12" rx="6" fill="#F5A8D0"/><rect x="434" y="284" width="40" height="12" rx="6" fill="#9B7BE0"/><rect x="434" y="310" width="40" height="12" rx="6" fill="#8FC7F0"/></svg>
+      <h1>luckynest</h1>
+      <div class="tag">幸运记账 · 账户独立 · 日历一看就懂</div>
+      <div class="login" id="loginBox">
+        <div class="login-tab">
+          <button class="ltab active" onclick="setLoginTab('pwd')">账号登录</button>
+          <button class="ltab" onclick="setLoginTab('code')">验证码登录</button>
+        </div>
+        <div class="l-field" id="acctField">
+          <span class="l-ic" style="color:var(--brand-d)"><svg class="ln-ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="8" r="4"/><path d="M4.5 20c1.5-3.5 4.5-5 7.5-5s6 1.5 7.5 5"/></svg></span>
+          <input id="acctInput" type="text" placeholder="请输入账号 / 手机号" autocomplete="off" autocapitalize="off">
+        </div>
+        <div class="l-field" id="pwdField">
+          <span class="l-ic" style="color:var(--brand-d)"><svg class="ln-ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="5" y="10" width="14" height="11" rx="3"/><path d="M8 10V7a4 4 0 018 0v3"/></svg></span>
+          <input id="pwdInput" type="password" placeholder="请输入密码" autocomplete="off">
+          <button class="l-eye" onclick="togglePwd()"><svg class="ln-ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="2.8"/></svg></button>
+        </div>
+        <div class="l-code" id="codeField">
+          <div class="l-field" style="flex:1"><span class="l-ic" style="color:var(--brand-d)"><svg class="ln-ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 11V4h7l9 9-7 7-9-9z"/><circle cx="8" cy="8" r="1.3"/></svg></span><input id="codeInput" type="text" placeholder="验证码" inputmode="numeric"></div>
+          <button class="code-btn" onclick="sendCode(this)">获取验证码</button>
+        </div>
+        <div class="l-row">
+          <label class="l-rem"><input type="checkbox" id="rememberBox"> 记住我</label>
+          <a class="l-forgot" onclick="toast('演示:忘记密码 → 重置流程')">忘记密码？</a>
+        </div>
+        <button class="l-login" onclick="doLogin()">登 录</button>
+        <button class="l-reg" onclick="toast('演示:注册新账号为占位交互')">还没有账号？<b>立即注册</b></button>
+        <div class="l-demo">演示账号:<b>demo / 123456</b> · 或直接点击下方成员进入</div>
+      </div>
+      <div id="splashMembers" style="display:none"></div>
+      <button class="add" style="display:none" onclick="toast('演示版:新增成员为占位交互')">＋ 新增家庭成员(演示)</button>
+      <div class="foot">luckynest 记账 · 高保真可交互原型 v1.0 · 内含模拟数据</div>
+    </div>
+
+    <div class="app">
+      <div class="views" id="views"></div>
+
+      <!-- 底部 TabBar -->
+      <div class="tabbar">
+        <button class="tab active" data-tab="home" onclick="go('home')"><span class="ti"><svg class="ln-ic" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11l8-7 8 7"/><path d="M6 10v10h12V10"/></svg></span>首页</button>
+        <button class="tab" data-tab="calendar" onclick="go('calendar')"><span class="ti"><svg class="ln-ic" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="5" width="16" height="15" rx="3"/><path d="M4 9h16M8 3v4M16 3v4"/><path d="M8.5 13.5l2 2 4-4"/></svg></span>日历</button>
+        <button class="tab-add" onclick="openBook()"><div class="fab"><svg class="ln-ic" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></div><span>记一笔</span></button>
+        <button class="tab" data-tab="accounts" onclick="go('accounts')"><span class="ti"><svg class="ln-ic" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="3"/><path d="M4 9h16M8 3v4M16 3v4"/></svg></span>账户</button>
+        <button class="tab" data-tab="me" onclick="go('me')"><span class="ti"><svg class="ln-ic" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4.5 20c1.5-3.5 4.5-5 7.5-5s6 1.5 7.5 5"/></svg></span>我的</button>
+      </div>
+    </div>
+
+    <!-- 记账底部弹层 -->
+    <div class="sheet-mask" id="bookMask" onclick="if(event.target===this)closeBook()">
+      <div class="sheet">
+        <div class="grab"></div>
+        <div class="type-tabs" id="typeTabs">
+          <button class="type-tab active" onclick="setType('expense')">支出</button>
+          <button class="type-tab" onclick="setType('income')">收入</button>
+          <button class="type-tab" onclick="setType('transfer')">转账</button>
+        </div>
+        <div class="amt-box"><span class="cny">¥</span><span class="amt" id="amountDisplay">0.00</span></div>
+        <span class="f-label">选择类目</span>
+        <div class="cats" id="catsGrid"></div>
+        <span class="f-label">选择账户</span>
+        <div class="acct-scroll" id="acctChips"></div>
+        <div class="nt-row">
+          <input id="noteInput" placeholder="备注(选填)" maxlength="20">
+          <input id="dateInput" type="date">
+        </div>
+        <div class="kbd">
+          <button onclick="kbd('1')">1</button><button onclick="kbd('2')">2</button><button onclick="kbd('3')">3</button>
+          <button onclick="kbd('4')">4</button><button onclick="kbd('5')">5</button><button onclick="kbd('6')">6</button>
+          <button onclick="kbd('7')">7</button><button onclick="kbd('8')">8</button><button onclick="kbd('9')">9</button>
+          <button onclick="kbd('0')">0</button><button onclick="kbd('.')">.</button><button class="del" onclick="kbd('del')">⌫</button>
+          <button onclick="kbd('00')">00</button>
+          <button class="go" onclick="saveTx()">保存 ✓</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 日概况弹层 -->
+    <div class="sheet-mask" id="dayMask" onclick="if(event.target===this)closeDay()">
+      <div class="sheet">
+        <div class="grab"></div>
+        <div class="day-head">
+          <div><div class="dt" id="dayTitle"></div><div class="dw" id="dayWeek"></div></div>
+          <button class="icon-chip" onclick="openBook()" style="border:1px solid var(--line)">＋</button>
+        </div>
+        <div class="day-sum">
+          <div class="ds-cell"><span>支出</span><b class="down" id="dayExp">¥0.00</b></div>
+          <div class="ds-cell"><span>收入</span><b class="up" id="dayInc">¥0.00</b></div>
+          <div class="ds-cell"><span>结余</span><b id="dayBal">¥0.00</b></div>
+        </div>
+        <div class="day-cat" id="dayCats"></div>
+        <div id="dayTxs"></div>
+      </div>
+    </div>
+
+    <div class="toast" id="toast"></div>
+  </div>
+</div>
+
+<div style="margin-left:32px;max-width:300px;color:#4a3f35;line-height:1.9">
+  <div style="font-size:1.05rem;font-weight:700;margin-bottom:8px">🏡 luckynest 记账 · 手机 APP 原型</div>
+  <div style="font-size:.84rem;color:#6b6b6b">
+    温馨暖橙调 iOS 风格高保真交互原型。左侧为 iPhone 屏幕。<br><br>
+    <b>可交互点:</b><br>
+    · 首屏点击「爸爸 / 妈妈」进入<br>
+    · 底部「＋」记一笔(可真实保存)<br>
+    · 日历点任意日期看当日概况<br>
+    · 首页/我的可切换成员<br>
+    · 五个 Tab 均可切换<br><br>
+    <span style="color:#b06a3c">建议在右侧浏览器中点击体验完整流程。</span>
+  </div>
+</div>
+
+<script>
+/* ================= 数据 ================= */
+const MEMBERS = {
+  dad:{ id:'dad', name:'爸爸', role:'记账主力', color:'#ffb3cd', emoji:'👨' },
+  mom:{ id:'mom', name:'妈妈', role:'成员', color:'#ffd98a', emoji:'👩' },
+};
+// luckynest 个性化描边图标库 — 替换系统 emoji,形成统一视觉语言
+// 每个图标:24x24 viewBox,线性描边(currentColor),stroke-width 1.8,圆头端点
+const LN_ICONS = {
+  import:'<path d="M12 20V10M8 14l4-4 4 4"/><path d="M5 20h14"/>',  eye:'<path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="2.8"/>',
+  // 底部导航
+  home:   '<path d="M4 11l8-7 8 7"/><path d="M6 10v10h12V10"/>',
+  cal:    '<rect x="4" y="5" width="16" height="15" rx="3"/><path d="M4 9h16M8 3v4M16 3v4"/><path d="M8.5 13.5l2 2 4-4"/>',
+  add:    '<path d="M12 5v14M5 12h14"/>',
+  acct:   '<rect x="4" y="3" width="16" height="18" rx="3"/><path d="M4 9h16M8 3v4M16 3v4"/>',
+  me:     '<circle cx="12" cy="8" r="4"/><path d="M4.5 20c1.5-3.5 4.5-5 7.5-5s6 1.5 7.5 5"/>',
+  // 首页顶部 & 快捷
+  plugin: '<path d="M9 3h6v4a3 3 0 106 0V3h1a2 2 0 012 2v4a6 6 0 01-6 6H10a6 6 0 01-6-6V5a2 2 0 012-2h3z"/><path d="M10 15v4a2 2 0 11-4 0v-2"/>',
+  gear:   '<circle cx="12" cy="12" r="3.2"/><path d="M12 3.5v2M12 18.5v2M3.5 12h2M18.5 12h2M6 6l1.4 1.4M16.6 16.6L18 18M18 6l-1.4 1.4M7.4 16.6L6 18"/>',
+  search: '<circle cx="11" cy="11" r="6.5"/><path d="M16 16l5 5"/>',
+  report: '<path d="M5 20V10M10 20V4M15 20v-7M20 20V7"/>',
+  coin:   '<circle cx="12" cy="12" r="8.5"/><path d="M9 9h6M9 12h6M9 15h4"/>',
+  wallet: '<rect x="3" y="6" width="18" height="13" rx="3"/><path d="M3 9h18M16 13.5h.01"/>',
+  // 账户类型
+  card:   '<rect x="3" y="5" width="18" height="14" rx="3"/><path d="M3 10h18M7 15h4"/>',
+  alipay: '<path d="M5 8c3-1 8-1.5 12 .5 1.8.9 2.8 2 3 3.5"/><path d="M4 12c2-1 6-2 9-1M8 14c-2 .5-4 1-4.5 2.5C3 18 7 17 11 15"/><path d="M4 19c6-2 12-5 16-7"/>',
+  wechat: '<path d="M8.5 7c-2.8 0-5 1.9-5 4.2 0 1.3.7 2.5 1.8 3.3l-.7 2.3 2.4-1.2c.5.1 1 .2 1.5.2M8.5 7c4.4 0 8 2.6 8 5.9 0 3.2-3.4 5.8-7.7 5.9"/><circle cx="6.5" cy="11" r=".6" fill="currentColor"/><circle cx="9.5" cy="11" r=".6" fill="currentColor"/><path d="M15 9.5c.3 0 .5.2.5.5M17.5 9.5c.3 0 .5.2.5.5"/>',
+  cash:   '<rect x="3" y="6" width="18" height="12" rx="3"/><circle cx="12" cy="12" r="3"/><path d="M6.5 9.5h.01M17.5 14.5h.01"/>',
+  invest: '<path d="M4 18l5-6 4 3 7-9"/><path d="M15 6h5v5"/>',
+  // 支出类目
+  food:   '<path d="M7 4v6a2 2 0 002 2h0a2 2 0 002-2V4M9 12v8"/><path d="M17 4v7a2.5 2.5 0 01-5 0V4"/>',
+  traffic:'<circle cx="7" cy="16" r="1.6"/><circle cx="17" cy="16" r="1.6"/><rect x="5" y="5" width="14" height="11" rx="3"/><path d="M8 8h8M7 13h10"/>',
+  shop:   '<path d="M5 9h14l-1.5 10h-11L5 9z"/><path d="M9 9V7a3 3 0 016 0v2"/>',
+  house:  '<path d="M4 11l8-7 8 7"/><path d="M6 10v10h12V10"/><path d="M10 20v-5h4v5"/>',
+  fun:    '<rect x="4" y="6" width="16" height="12" rx="3"/><circle cx="9" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="15" cy="12" r="1"/>',
+  med:    '<path d="M9 5h6v4h4v6h-4v4H9v-4H5V9h4V5z"/>',
+  edu:    '<path d="M3 8l9-4 9 4-9 4-9-4z"/><path d="M7 10v5c0 1 2 3 5 3s5-2 5-3v-5"/>',
+  gift:   '<rect x="4" y="9" width="16" height="11" rx="2"/><path d="M4 13h16M12 9v11M12 9c-3 0-5-1.5-5-4 0-1.5 1-2.5 2.5-2.5C11 2.5 12 9 12 9zM12 9c3 0 5-1.5 5-4 0-1.5-1-2.5-2.5-2.5C13 2.5 12 9 12 9z"/>',
+  cloth:  '<path d="M7 4l5 2 5-2v8l-2 1.5V20H9v-6.5L7 12V4z"/><path d="M9.5 12.5V8"/>',
+  digital:'<rect x="6" y="3" width="12" height="18" rx="3"/><path d="M10 18.5h4"/><path d="M9.5 6h5"/>',
+  pet:    '<circle cx="8" cy="13" r="4.5"/><circle cx="16" cy="13" r="4.5"/><path d="M8 13c.5-4 3-6 4-8 1 2 3.5 4 4 8"/>',
+  other:  '<rect x="5" y="5" width="14" height="14" rx="3"/><path d="M12 9v6M9 12h6"/>',
+  // 收入类目
+  salary: '<path d="M12 4v16M6 9c1.5-1.5 3.5-2 6-2 3.5 0 6 1.5 6 4.5 0 6-12 3-12 9 0 2.5 2.5 3.5 6 3.5 2.5 0 4.5-.5 6-2"/>',
+  bonus:  '<circle cx="12" cy="12" r="8.5"/><path d="M12 8v8M9 10.5c0-1 1.3-1.5 3-1.5s3 .5 3 1.5c0 2.5-6 1.5-6 4 0 1 1.3 1.5 3 1.5s3-.5 3-1.5"/>',
+  investin:'<path d="M4 18l5-6 4 3 7-9"/><path d="M15 6h5v5"/>',
+  redpacket:'<path d="M4 6a2 2 0 012-2h12a2 2 0 012 2v12a2 2 0 01-2 2H6a2 2 0 01-2-2V6z"/><path d="M4 10h16M9 6l3 4 3-4"/>',
+  parttime:'<rect x="4" y="6" width="16" height="13" rx="3"/><path d="M4 10h16M12 6v3"/>',
+  // 我的 / 设置行
+  family: '<circle cx="9" cy="8.5" r="3.5"/><path d="M3 19c1-3 3-4.5 6-4.5s5 1.5 6 4.5"/><circle cx="17.5" cy="9" r="2.5"/><path d="M16 14.8c2.6.2 4 1.6 5 4.2"/>',
+  lock:   '<rect x="5" y="10" width="14" height="11" rx="3"/><path d="M8 10V7a4 4 0 018 0v3"/>',
+  bell:   '<path d="M6 16v-4a6 6 0 0112 0v4l2 3H4l2-3z"/><path d="M10 19a2 2 0 004 0"/>',
+  export: '<path d="M12 4v10M8 10l4 4 4-4"/><path d="M5 18v1a2 2 0 002 2h10a2 2 0 002-2v-1"/>',
+  cloud:  '<path d="M7 18a4.5 4.5 0 010-9 6 6 0 0111.5-1.5A4 4 0 0118 18H7z"/>',
+  info:   '<circle cx="12" cy="12" r="8.5"/><path d="M12 11v5M12 8h.01"/>',
+  budget: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5v9M9 10c0-1.2 1.3-1.8 3-1.8s3 .6 3 1.8c0 3-6 1.8-6 4.8 0 1.2 1.3 1.8 3 1.8s3-.6 3-1.8"/>',
+  // 插件
+  luck:   '<path d="M12 4c1 3.5 3.5 6 7 6-3.5 0-6 2.5-7 6-1-3.5-3.5-6-7-6 3.5 0 6-2.5 7-6z"/>',
+  trophy: '<path d="M8 4h8v5a4 4 0 01-8 0V4z"/><path d="M8 5H5.5a2 2 0 002.8 2.2M16 5h2.5a2 2 0 01-2.8 2.2M12 13v4M9 20h6M10 17h4"/>',
+  voice:  '<rect x="9" y="3" width="6" height="12" rx="3"/><path d="M5.5 11a6.5 6.5 0 0013 0M12 17.5V21M8.5 21h7"/>',
+  paint:  '<rect x="4" y="4" width="14" height="14" rx="3"/><path d="M4 10h14M10 4v16"/>',
+  aa:     '<circle cx="7" cy="9" r="3"/><circle cx="17" cy="9" r="3"/><path d="M3.5 18c.8-2 2-3 3.5-3s2.7 1 3.5 3M13.5 18c.8-2 2-3 3.5-3s2.7 1 3.5 3"/>',
+  stock:  '<path d="M4 18l4-6 3.5 3L17 7"/><path d="M13.5 7H17v3.5"/>',
+  wish:   '<path d="M12 20s-7-4.5-9.5-9A5 5 0 0112 6.5 5 5 0 0121.5 11C19 15.5 12 20 12 20z"/>',
+  thunder:'<path d="M13 3L5 13h6l-1 8 8-10h-6l1-8z"/>',
+  tag:    '<path d="M4 11V4h7l9 9-7 7-9-9z"/><circle cx="8" cy="8" r="1.3"/>',
+};
+function lnIcon(name, size, cls){
+  const paths = LN_ICONS[name] || LN_ICONS.other;
+  const s = size||18;
+  return `<svg class="ln-ic ${cls||''}" width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths}</svg>`;
+}
+
+function lnIcon(name, size, cls){
+  const paths = LN_ICONS[name] || LN_ICONS.other;
+  const s = size||18;
+  return `<svg class="ln-ic ${cls||''}" width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths}</svg>`;
+}
+const ACCOUNT_TYPES = {
+  debit:  { name:'借记卡', ic: lnIcon('card', 16) },
+  credit: { name:'信用卡', ic: lnIcon('wallet', 16) },
+  alipay: { name:'支付宝', ic: lnIcon('alipay', 16) },
+  wechat: { name:'微信', ic: lnIcon('wechat', 16) },
+  cash:   { name:'现金', ic: lnIcon('cash', 16) },
+  invest: { name:'理财', ic: lnIcon('invest', 16) },
+};
+const ACCOUNTS = [
+  { id:'dad-salary', member:'dad', name:'招商工资卡', type:'debit', color:'#ffb3cd', init:38200 },
+  { id:'dad-cc', member:'dad', name:'招商信用卡', type:'credit', color:'#ff9d9d', init:-2680 },
+  { id:'dad-alipay', member:'dad', name:'支付宝', type:'alipay', color:'#c1e7dc', init:3120 },
+  { id:'dad-wechat', member:'dad', name:'微信钱包', type:'wechat', color:'#b8d4f0', init:1658.9 },
+  { id:'dad-cash', member:'dad', name:'现金', type:'cash', color:'#ffd98a', init:850 },
+  { id:'mom-alipay', member:'mom', name:'支付宝', type:'alipay', color:'#c1e7dc', init:12280 },
+  { id:'mom-cc', member:'mom', name:'招行信用卡', type:'credit', color:'#ff9d9d', init:-1940 },
+  { id:'mom-salary', member:'mom', name:'工资卡', type:'debit', color:'#dcc9f0', init:27800 },
+  { id:'mom-wechat', member:'mom', name:'微信零钱', type:'wechat', color:'#b8d4f0', init:1306 },
+];
+const CATS = {
+  expense: [
+    ['food',lnIcon('food',18),'餐饮'],['traffic',lnIcon('traffic',18),'交通'],['shopping',lnIcon('shop',18),'购物'],['home',lnIcon('house',18),'居住'],
+    ['fun',lnIcon('fun',18),'娱乐'],['med',lnIcon('med',18),'医疗'],['edu',lnIcon('edu',18),'教育'],['gift',lnIcon('gift',18),'人情'],
+    ['clothes',lnIcon('cloth',18),'服饰'],['digital',lnIcon('digital',18),'数码'],['pet',lnIcon('pet',18),'宠物'],['other',lnIcon('other',18),'其他'],
+  ],
+  income: [
+    ['salary',lnIcon('salary',18),'工资'],['bonus',lnIcon('bonus',18),'奖金'],['invest',lnIcon('investin',18),'理财'],['redpacket',lnIcon('redpacket',18),'红包'],
+    ['parttime',lnIcon('parttime',18),'兼职'],['other-in',lnIcon('other',18),'其他'],
+  ],
+};
+/* 9月模拟账单 */
+const TXS = [
+  ['2026-09-01','expense','shopping','购物','唯品会订单 #8841',318,'dad-alipay'],
+  ['2026-09-01','expense','food','餐饮','全家便利店早餐',12.5,'dad-wechat'],
+  ['2026-09-01','income','salary','工资','8月工资',18200,'dad-salary'],
+  ['2026-09-02','expense','traffic','交通','地铁通勤',6,'dad-wechat'],
+  ['2026-09-02','expense','food','餐饮','午餐·公司食堂',28,'dad-wechat'],
+  ['2026-09-03','expense','food','餐饮','晚餐·商场聚餐',186,'dad-alipay'],
+  ['2026-09-03','expense','med','医疗','感冒药·药店',45.8,'dad-alipay'],
+  ['2026-09-04','expense','traffic','交通','打车·加班回家',32.5,'dad-wechat'],
+  ['2026-09-04','expense','food','餐饮','早餐豆浆油条',9,'dad-cash'],
+  ['2026-09-05','expense','shopping','购物','盒马生鲜',236.4,'dad-alipay'],
+  ['2026-09-05','expense','fun','娱乐','周末电影',128,'dad-alipay'],
+  ['2026-09-06','expense','food','餐饮','周末家庭聚餐',428,'dad-wechat'],
+  ['2026-09-06','expense','home','居住','水电燃气费',326,'dad-salary'],
+  ['2026-09-07','expense','traffic','交通','地铁通勤',6,'dad-wechat'],
+  ['2026-09-07','expense','food','餐饮','午餐·外卖',35.5,'dad-alipay'],
+  ['2026-09-08','expense','edu','教育','孩子兴趣班缴费',1200,'dad-salary'],
+  ['2026-09-08','expense','food','餐饮','早餐·路边摊',8,'dad-cash'],
+  ['2026-09-09','expense','food','餐饮','午餐·老乡鸡',42,'dad-wechat'],
+  ['2026-09-09','expense','shopping','购物','超市采购',168.3,'dad-alipay'],
+  ['2026-09-09','expense','traffic','交通','地铁通勤',6,'dad-wechat'],
+  ['2026-09-09','income','redpacket','红包','亲戚红包',200,'dad-wechat'],
+  ['2026-09-01','expense','food','餐饮','菜市场买菜',86.5,'mom-alipay'],
+  ['2026-09-02','expense','shopping','购物','网购日用品',128,'mom-alipay'],
+  ['2026-09-02','expense','food','餐饮','下午茶',58,'mom-wechat'],
+  ['2026-09-04','expense','home','居住','宽带续费',199,'mom-alipay'],
+  ['2026-09-05','expense','clothes','服饰','优衣库·秋装',399,'mom-alipay'],
+  ['2026-09-06','expense','food','餐饮','烘焙材料',76,'mom-wechat'],
+  ['2026-09-07','expense','gift','人情','同事结婚随礼',500,'mom-alipay'],
+  ['2026-09-08','expense','food','餐饮','超市补货',142,'mom-alipay'],
+  ['2026-09-09','expense','food','餐饮','早餐',18,'mom-wechat'],
+  ['2026-09-09','expense','shopping','购物','鲜花·家居',66,'mom-alipay'],
+].map(t => ({ date:t[0], type:t[1], cat:t[2], catName:t[3], note:t[4], amount:t[5], account:t[6], member:ACCOUNTS.find(a=>a.id===t[6]).member }));
+
+/* 8月历史(用于趋势图,只到 4 月) */
+const TREND = [
+  ['4月',5200,'dad'],['5月',6480,'dad'],['6月',7120,'dad'],['7月',8680,'dad'],['8月',11540,'dad'],
+];
+TREND.push(['9月',Math.round(TXS.filter(t=>t.member==='dad'&&t.type==='expense').reduce((s,t)=>s+t.amount,0))]);
+const MOM_TREND = [['4月',3800],['5月',4260],['6月',5100],['7月',4720],['8月',5230]];
+
+const state = {
+  member:'dad', view:'home', calDate:'2026-09-09', calFilter:'family',
+  book:{ type:'expense', amount:'', cat:'food', account:'dad-wechat', to:null, date:'2026-09-09', note:'' },
+};
+const $ = id => document.getElementById(id);
+
+/* ================= 登录 ================= */
+let loginTab = 'pwd';
+function setLoginTab(t){
+  loginTab = t;
+  document.querySelectorAll('.ltab').forEach((el,i)=>el.classList.toggle('active', i===0 && t==='pwd' || i===1 && t==='code'));
+  $('pwdField').style.display = t==='pwd' ? 'flex' : 'none';
+  $('codeField').style.display = t==='code' ? 'flex' : 'none';
+}
+function togglePwd(){
+  const p = $('pwdInput');
+  p.type = p.type==='password' ? 'text' : 'password';
+}
+function sendCode(btn){
+  const v = $('codeInput').value;
+  if(!v){ toast('请输入手机号/账号后再获取验证码'); return; }
+  let n = 60;
+  btn.disabled = true; btn.textContent = n + 's';
+  const t = setInterval(()=>{ n--; if(n<=0){ clearInterval(t); btn.disabled=false; btn.textContent='获取验证码'; } else btn.textContent = n+'s'; }, 1000);
+  toast('验证码已发送(演示:1234)');
+}
+function doLogin(){
+  const acct = $('acctInput').value.trim();
+  const pwd = $('pwdInput').value;
+  if(loginTab==='pwd'){
+    if(!acct || !pwd){ toast('请输入账号和密码'); return; }
+    if(acct==='demo' && pwd!=='123456'){ toast('密码错误(演示:123456)'); return; }
+    if(acct==='demo'){ loginDirect('dad'); return; }
+    loginDirect('mom'); // 其他账号 → 妈妈(演示)
+  } else {
+    const code = $('codeInput').value.trim();
+    if(!code){ toast('请输入验证码'); return; }
+    if(code!=='1234'){ toast('验证码错误(演示:1234)'); return; }
+    loginDirect('dad');
+  }
+}
+function loginDirect(mid){
+  // 账号已绑定身份:直接进入对应成员的数据,不展示成员选择页
+  enterApp(mid);
+  toast('欢迎回来,' + MEMBERS[mid].name);
+}
+
+/* ================= 工具 ================= */
+function money(n){ return '¥' + n.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+function todayStr(){
+  const t = new Date();
+  return t.getFullYear() + '-' + String(t.getMonth()+1).padStart(2,'0') + '-' + String(t.getDate()).padStart(2,'0');
+}
+function memberAccts(mid){ return ACCOUNTS.filter(a => a.member === mid); }
+function acctOf(id){ return ACCOUNTS.find(a => a.id === id); }
+function acctBal(id){
+  const a = acctOf(id); if(!a) return 0;
+  let b = a.init;
+  TXS.forEach(t => {
+    if(t.account === id){
+      if(t.type === 'expense') b -= t.amount;
+      else if(t.type === 'income') b += t.amount;
+      else if(t.type === 'transfer-out') b -= t.amount;
+    }
+    if(t.to === id && t.type === 'transfer-in') b += t.amount;
+  });
+  return b;
+}
+function memberBal(mid){ return memberAccts(mid).reduce((s,a)=>s+acctBal(a.id),0); }
+function memberTx(mid, type, month){
+  return TXS.filter(t => t.member===mid && t.type===type && (!month || t.date.startsWith(month)));
+}
+function monthStr(){ return state.calDate.slice(0,7); }
+function fmtDate(iso){ const [y,m,d]=iso.split('-'); return y+'年'+Number(m)+'月'+Number(d)+'日'; }
+function weekName(iso){
+  const wd = new Date(iso+'T00:00:00').getDay();
+  return ['周日','周一','周二','周三','周四','周五','周六'][wd];
+}
+let toastTimer;
+function toast(msg){
+  const t = $('toast'); t.textContent = msg; t.classList.add('show');
+  clearTimeout(toastTimer); toastTimer = setTimeout(()=>t.classList.remove('show'), 1800);
+}
+
+/* ================= 记账 ================= */
+const CAT_ICON = {}; const CAT_NAME = {};
+Object.entries(CATS).forEach(([type,list])=>{ list.forEach(([id,ic,nm])=>{ CAT_ICON[type+':'+id]=ic; CAT_NAME[type+':'+id]=nm; }); });
+
+function setType(type){
+  state.book.type = type;
+  document.querySelectorAll('.type-tab').forEach((el,i)=>el.classList.toggle('active', i===0 && type==='expense' || i===1 && type==='income' || i===2 && type==='transfer'));
+  if(type==='transfer'){ state.book.cat=null; } else { state.book.cat = type==='expense' ? 'food' : 'salary'; }
+  renderBook();
+}
+function openBook(){
+  state.book.amount='';
+  $('noteInput').value=''; $('dateInput').value=todayStr();
+  state.book.date=todayStr();
+  renderBook();
+  $('bookMask').classList.add('show');
+}
+function closeBook(){ $('bookMask').classList.remove('show'); }
+function kbd(k){
+  const b = state.book;
+  if(k==='del') b.amount = b.amount.slice(0,-1);
+  else if(k==='.') { if(!b.amount.includes('.')) b.amount = b.amount ? b.amount+'.' : '0.'; }
+  else if(k==='00') { if(b.amount) b.amount += '00'; }
+  else b.amount += k;
+  renderBookAmount();
+}
+function renderBookAmount(){
+  const b = state.book;
+  $('amountDisplay').textContent = b.amount ? Number(b.amount).toLocaleString('zh-CN',{maximumFractionDigits:2}) : '0.00';
+  $('amountDisplay').classList.toggle('ph', !b.amount);
+}
+function pickCat(id){
+  state.book.cat = id;
+  renderBook();
+}
+function pickAcct(id){
+  state.book.account = id;
+  renderBook();
+}
+function renderBook(){
+  const b = state.book;
+  renderBookAmount();
+  if(b.type==='transfer'){
+    const accts = memberAccts(state.member);
+    let to = accts.find(a=>a.id!==b.account) || accts[0];
+    if(!b.to || b.to===b.account) b.to = to.id;
+    $('catsGrid').innerHTML = `<div style="grid-column:1/-1;text-align:center;font-size:.78rem;color:var(--ink3);padding:8px 0">转账不涉及类目,直接选择转出 / 转入账户</div>`;
+    $('acctChips').innerHTML = `
+      <div style="display:flex;flex-direction:column;gap:8px;width:100%">
+        <div style="display:flex;gap:8px;align-items:center">
+          <span style="font-size:.7rem;color:var(--ink3);flex:none">转出</span>
+          <div style="display:flex;gap:8px;overflow-x:auto">${accts.map(a=>`
+            <button class="acct-chip ${b.account===a.id?'active':''}" onclick="pickAcct('${a.id}')"><span class="dot" style="background:${a.color}"></span>${a.name}</button>`).join('')}
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <span style="font-size:.7rem;color:var(--ink3);flex:none">转入</span>
+          <div style="display:flex;gap:8px;overflow-x:auto">${accts.map(a=>`
+            <button class="acct-chip ${b.to===a.id?'active':''}" onclick="pickTo('${a.id}')"><span class="dot" style="background:${a.color}"></span>${a.name}</button>`).join('')}
+          </div>
+        </div>
+      </div>`;
+  } else {
+    const list = CATS[b.type];
+    const recent = recentCats(b.type);
+    const sorted = [...list].sort((x,y)=>{ const rx=recent.indexOf(x[0]), ry=recent.indexOf(y[0]); return (rx===-1?99:rx)-(ry===-1?99:ry); });
+    $('catsGrid').innerHTML = sorted.map(([id,ic,nm])=>`
+      <button class="cat ${b.cat===id?'active':''}" onclick="pickCat('${id}')"><span class="ci">${ic}</span>${nm}</button>`).join('');
+    const accts = memberAccts(state.member);
+    $('acctChips').innerHTML = accts.map(a=>`
+      <button class="acct-chip ${b.account===a.id?'active':''}" onclick="pickAcct('${a.id}')"><span class="dot" style="background:${a.color}"></span>${a.name}</button>`).join('');
+  }
+}
+function recentCats(type){
+  const counts = {};
+  memberTx(state.member, type).slice(-14).forEach(t=>{ counts[t.cat]=(counts[t.cat]||0)+1; });
+  return Object.keys(counts).sort((a,b)=>counts[b]-counts[a]);
+}
+function pickTo(id){
+  if(id===state.book.account){ toast('转入账户不能与转出相同'); return; }
+  state.book.to = id; renderBook();
+}
+function saveTx(){
+  const b = state.book;
+  const amt = parseFloat(b.amount);
+  if(!amt || amt<=0){ toast('请先输入金额'); return; }
+  if(b.type==='transfer'){
+    const from = acctOf(b.account); let to = acctOf(b.to);
+    if(!to || from.id===to.id){ to = memberAccts(state.member).find(a=>a.id!==b.account); }
+    if(!from || !to || from.id===to.id){ toast('请选择两个不同账户'); return; }
+    TXS.push({ date:b.date||todayStr(), type:'transfer-out', cat:null, catName:'转账', note:b.note||'账户互转', amount:amt, account:from.id, to:to.id, member:state.member });
+    TXS.push({ date:b.date||todayStr(), type:'transfer-in', cat:null, catName:'转账', note:b.note||'账户互转', amount:amt, account:to.id, to:from.id, member:state.member });
+    toast('转账已保存:'+money(amt));
+  } else {
+    TXS.push({ date:b.date||todayStr(), type:b.type, cat:b.cat, catName:CAT_NAME[b.type+':'+b.cat]||'其他', note:b.note||'', amount:amt, account:b.account, member:state.member });
+    toast((b.type==='expense'?'支出':'收入')+'已保存:'+money(amt));
+  }
+  closeBook(); render();
+}
+
+/* ================= 页面 ================= */
+function render(){
+  if($('splashMembers').children.length===0) renderSplash();
+  const v = $('views');
+  let html;
+  if(state.view==='reports') html = pageReports();
+  else if(state.view==='calendar') html = pageCalendar();
+  else if(state.view==='accounts') html = pageAccounts();
+  else if(state.view==='me') html = pageMe();
+  else if(state.view==='plugins') html = pagePlugins();
+  else html = pageHome();
+  v.innerHTML = html;
+  document.querySelectorAll('.tab').forEach(el=>{
+    const on = state.view==='reports'||state.view==='plugins' ? el.dataset.tab==='me' : el.dataset.tab===state.view;
+    el.classList.toggle('active', on);
+  });
+}
+function renderSplash(){
+  $('splashMembers').innerHTML = Object.values(MEMBERS).map(m=>`
+    <div class="member-card" onclick="enterApp('${m.id}')">
+      <div class="avatar" style="background:${m.color}">${m.emoji}</div>
+      <div class="info">
+        <div class="nm">${m.name}</div>
+        <div class="role">${m.role}</div>
+        <div class="stat">资产合计 <b class="money" style="color:${m.color}">${money(memberBal(m.id))}</b> · 本月支出 ${money(memberTx(m.id,'expense',monthStr()).reduce((s,t)=>s+t.amount,0))} · 账户 ${memberAccts(m.id).length} 个</div>
+      </div>
+      <span class="chev">›</span>
+    </div>`).join('');
+}
+function enterApp(mid){
+  state.member = mid;
+  state.book.account = memberAccts(mid)[0]?.id || null;
+  $('splash').classList.add('hide');
+  render();
+}
+function go(view){
+  state.view = view;
+  if(view==='calendar') state.calFilter = 'family';
+  render();
+}
+
+function pagePlugins(){
+  const plugins = [
+    { ic:'luck', name:'每日好运', sub:'今日幸运数字与消费提示', tag:'推荐', hot:true },
+    { ic:'redpacket', name:'红包雨', sub:'节日红包抽奖,记账更快乐', tag:'娱乐', hot:true },
+    { ic:'trophy', name:'存钱挑战', sub:'52 周存钱计划,边存边看进度', tag:'理财' },
+    { ic:'thunder', name:'快捷记账', sub:'桌面小组件·秒记一笔', tag:'效率' },
+    { ic:'cal', name:'账单提醒', sub:'信用卡还款日·水电费自动提醒', tag:'效率', hot:true },
+    { ic:'voice', name:'语音记账', sub:'说一句就记好,解放双手', tag:'AI', hot:true },
+    { ic:'paint', name:'主题皮肤', sub:'温馨/极简/星空,换肤自由', tag:'美化' },
+    { ic:'aa', name:'AA 分账', sub:'聚餐旅行自动算清谁该付多少', tag:'社交' },
+    { ic:'stock', name:'股票基金', sub:'持仓与记账联动,看资产变化', tag:'理财' },
+    { ic:'wish', name:'心愿单', sub:'想买的东西存下来,理性消费', tag:'生活' },
+  ];
+  return `
+    <div class="nav-title">插件中心</div>
+    <div class="nav-sub">幸运小工具 · 花式记账 · 让记账更好玩</div>
+    <div class="card card-pad" style="background:linear-gradient(135deg,var(--brand-d),#a884e8);color:#fff">
+      <div style="font-size:.95rem;font-weight:800;display:flex;align-items:center;gap:6px"><svg class="ln-ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4c1 3.5 3.5 6 7 6-3.5 0-6 2.5-7 6-1-3.5-3.5-6-7-6 3.5 0 6-2.5 7-6z"/></svg> 今日好运</div>
+      <div style="font-size:.78rem;opacity:.92;margin-top:3px">幸运数字 8 · 今日宜理性消费,忌冲动剁手</div>
+      <div style="font-size:.68rem;opacity:.78;margin-top:8px">已开启 3 个幸运插件,继续解锁更多玩法 ›</div>
+    </div>
+    <div class="card">
+      ${plugins.map((p,i)=>`
+        <button class="cell" onclick="toast('「${p.name}」为演示插件,点击后即可接入')">
+          <span class="ci">${lnIcon(p.ic,17)}</span>
+          <span class="ct">${p.name}${p.hot?'<span style="color:var(--red);font-size:.62rem;margin-left:5px;background:var(--red);color:#fff;border-radius:999px;padding:1px 7px">HOT</span>':''}<div class="cs">${p.sub}</div></span>
+          <span class="cv" style="background:var(--brand-l);color:var(--brand-d);border-radius:999px;padding:3px 10px;font-size:.68rem">${p.tag}</span>
+          <span class="ch">›</span>
+        </button>`).join('')}
+    </div>
+    <div style="height:14px"></div>`;
+}
+
+function pageHome(){
+  const m = MEMBERS[state.member];
+  const today = todayStr();
+  const tExp = TXS.filter(t=>t.member===state.member&&t.type==='expense'&&t.date===today).reduce((s,t)=>s+t.amount,0);
+  const tInc = TXS.filter(t=>t.member===state.member&&t.type==='income'&&t.date===today).reduce((s,t)=>s+t.amount,0);
+  const mo = monthStr();
+  const mExp = memberTx(state.member,'expense',mo).reduce((s,t)=>s+t.amount,0);
+  const mInc = memberTx(state.member,'income',mo).reduce((s,t)=>s+t.amount,0);
+  const bal = memberBal(state.member);
+  const accts = memberAccts(state.member).slice(0,3);
+  const recent = TXS.filter(t=>t.member===state.member).sort((a,b)=>b.date.localeCompare(a.date)).slice(0,5);
+  const budget = 12000;
+  const pct = Math.min(100, Math.round(mExp/budget*100));
+  return `
+    <div class="home-head">
+      <div class="who">luckynest <small>· 家庭账本</small></div>
+      <div class="acts">
+        <button class="icon-chip" onclick="go('plugins')" title="插件中心"><svg class="ln-ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6v4a3 3 0 106 0V3h1a2 2 0 012 2v4a6 6 0 01-6 6H10a6 6 0 01-6-6V5a2 2 0 012-2h3z"/><path d="M10 15v4a2 2 0 11-4 0v-2"/></svg></button>
+        <button class="icon-chip" onclick="toast('设置:点击底部「我的」')" title="设置"><svg class="ln-ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="3.2"/><path d="M12 3.5v2M12 18.5v2M3.5 12h2M18.5 12h2M6 6l1.4 1.4M16.6 16.6L18 18M18 6l-1.4 1.4M7.4 16.6L6 18"/></svg></button>
+      </div>
+    </div>
+    <div class="search-bar"><svg class="ln-ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l5 5"/></svg> <span>搜索账单、类目、备注…</span></div>
+    <div class="kv-row">
+      <div class="kv-card"><div class="kl"><svg class="ln-ic" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="8.5"/><path d="M9 9h6M9 12h6M9 15h4"/></svg> 今日可花额度</div><div class="kv g">${money(Math.max(0,budget-mExp))}</div><div style="font-size:.64rem;color:var(--ink3);margin-top:2px">本月预算剩余</div></div>
+      <div class="kv-card"><div class="kl"><svg class="ln-ic" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="3" y="6" width="18" height="13" rx="3"/><path d="M3 9h18M16 13.5h.01"/></svg> 本月已记支出</div><div class="kv b">${money(mExp)}</div><div style="font-size:.64rem;color:var(--ink3);margin-top:2px">预算 ${money(budget)}</div></div>
+    </div>
+    <div class="today-hero">
+      <div class="lbl"><span class="dot"><svg class="ln-ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 4v16M6 9c1.5-1.5 3.5-2 6-2 3.5 0 6 1.5 6 4.5 0 6-12 3-12 9 0 2.5 2.5 3.5 6 3.5 2.5 0 4.5-.5 6-2"/></svg></span>今日概况 · ${fmtDate(today)} ${weekName(today)}</div>
+      <div class="amt">${tExp>0||tInc>0 ? '支出 '+money(tExp)+' · 收入 '+money(tInc) : money(0)}</div>
+      <div class="grid">
+        <div class="g-cell"><b>${money(tExp)}</b><span>今日支出</span></div>
+        <div class="g-cell"><b>${money(tInc)}</b><span>今日收入</span></div>
+        <div class="g-cell"><b>${money(tInc-tExp)}</b><span>今日结余</span></div>
+      </div>
+    </div>
+    <div class="card month-card">
+      <div class="ring">
+        <svg width="74" height="74" viewBox="0 0 74 74">
+          <circle cx="37" cy="37" r="32" fill="none" stroke="#f0e7db" stroke-width="8"/>
+          <circle cx="37" cy="37" r="32" fill="none" stroke="${pct>70?'var(--red)':'var(--brand)'}" stroke-width="8" stroke-linecap="round"
+            stroke-dasharray="${2*Math.PI*32}" stroke-dashoffset="${2*Math.PI*32*(1-pct/100)}"/>
+        </svg>
+        <div class="ct"><b>${pct}%</b>预算</div>
+      </div>
+      <div class="month-cols">
+        <div class="m-col"><span>本月支出</span><b class="down">${money(mExp)}</b><small>预算 ${money(budget)}</small></div>
+        <div class="m-col"><span>本月收入</span><b class="up">${money(mInc)}</b><small>结余 ${money(mInc-mExp)}</small></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="h-row card-pad" style="margin-bottom:0">
+        <span class="t">我的账户</span>
+        <button class="more" onclick="go('accounts')">查看全部 ›</button>
+      </div>
+      <div class="acct-strip" style="padding-top:4px">
+        ${accts.map(a=>`
+          <div class="acct-item">
+            <div class="acct-ic" style="background:${a.color}">${ACCOUNT_TYPES[a.type].ic}</div>
+            <div><div class="an">${a.name}</div><div class="as">${ACCOUNT_TYPES[a.type].name} · 本月${a.type==='credit'?'待还':'结余'}</div></div>
+            <div class="abal"><b class="${acctBal(a.id)<0?'down':'up-bg'}">${money(acctBal(a.id))}</b>
+              <small>${money(a.type==='credit' ? -acctBal(a.id) : (memberTx(state.member,'expense',monthStr()).filter(t=>t.account===a.id).reduce((s,t)=>s+t.amount,0)))}</small></div>
+          </div>`).join('')}
+        ${memberAccts(state.member).length>3?`<div class="acct-item" onclick="go('accounts')"><div class="acct-ic" style="background:#e6eae4;color:#5d6b63">⋯</div><div><div class="an">还有 ${memberAccts(state.member).length-3} 个账户</div><div class="as">点击查看全部</div></div><div class="abal">›</div></div>`:''}
+      </div>
+    </div>
+    <div class="card">
+      <div class="h-row card-pad" style="margin-bottom:0"><span class="t">快捷入口</span></div>
+      <div class="quick-grid">
+        <button class="quick-cell" onclick="go('calendar')"><span class="qi"><svg class="ln-ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="4" y="5" width="16" height="15" rx="3"/><path d="M4 9h16M8 3v4M16 3v4"/><path d="M8.5 13.5l2 2 4-4"/></svg></span>日历</button>
+        <button class="quick-cell" onclick="go('accounts')"><span class="qi"><svg class="ln-ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="4" y="3" width="16" height="18" rx="3"/><path d="M4 9h16M8 3v4M16 3v4"/></svg></span>账户</button>
+        <button class="quick-cell" onclick="go('reports')"><span class="qi"><svg class="ln-ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 20V10M10 20V4M15 20v-7M20 20V7"/></svg></span>报表</button>
+        <button class="quick-cell" onclick="go('plugins')"><span class="qi"><svg class="ln-ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6v4a3 3 0 106 0V3h1a2 2 0 012 2v4a6 6 0 01-6 6H10a6 6 0 01-6-6V5a2 2 0 012-2h3z"/><path d="M10 15v4a2 2 0 11-4 0v-2"/></svg></span>插件</button>
+      </div>
+    </div>
+    <div class="card">
+      <div class="h-row card-pad" style="margin-bottom:0"><span class="t">最近账单</span><button class="more" onclick="go('calendar')">日历 ›</button></div>
+      ${recent.map(t=>`
+        <div class="tx-item">
+          <div class="tx-ic">${CAT_ICON[t.type+':'+t.cat] || (t.type==='transfer-out'?lnIcon('export',16):t.type==='transfer-in'?lnIcon('import',16):lnIcon('other',16))}</div>
+          <div><div class="tn">${t.catName||'其他'}</div><div class="ts">${t.note || '—'} · ${t.date.slice(5)}</div></div>
+          <div class="tamt ${t.type==='expense'?'down':t.type==='income'?'up':'ink2'}">${t.type==='expense'?'-':t.type==='income'?'+':''}${money(t.amount)}</div>
+        </div>`).join('')}
+    </div>`;
+}
+
+function pageCalendar(){
+  const [y,m] = state.calDate.split('-').map(Number);
+  const first = new Date(y, m-1, 1);
+  const startDow = first.getDay();
+  const daysInMonth = new Date(y, m, 0).getDate();
+  const today = todayStr();
+  const cells = [];
+  for(let i=0;i<startDow;i++) cells.push(null);
+  for(let d=1;d<=daysInMonth;d++) cells.push(new Date(y,m-1,d));
+  const mo = monthStr();
+  const scope = state.calFilter==='family' ? null : state.member;
+  const days = cells.map((dt,idx)=>{
+    if(!dt) return { out:true };
+    const iso = y+'-'+String(m).padStart(2,'0')+'-'+String(dt.getDate()).padStart(2,'0');
+    const txs = TXS.filter(t=>t.date===iso && (!scope || t.member===scope));
+    const ex = txs.filter(t=>t.type==='expense').reduce((s,t)=>s+t.amount,0);
+    const inc = txs.filter(t=>t.type==='income').reduce((s,t)=>s+t.amount,0);
+    return { iso, d:dt.getDate(), ex, inc, has:txs.length>0, today:iso===today };
+  });
+  const famLabel = state.calFilter==='family' ? '家庭视角' : MEMBERS[state.member].name+'视角';
+  return `
+    <div class="cal-head">
+      <div class="ym">${y}年${m}月</div>
+      <div class="cal-nav">
+        <button onclick="calShift(-1)">‹</button>
+        <button onclick="calToday()">今</button>
+        <button onclick="calShift(1)">›</button>
+      </div>
+    </div>
+    <div class="nav-sub">${famLabel} · 点击日期查看当日概况</div>
+    <div class="cal-filter">
+      <button class="fchip ${state.calFilter==='family'?'active':''}" onclick="state.calFilter='family';render()"><svg class="ln-ic" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="9" cy="8.5" r="3.5"/><path d="M3 19c1-3 3-4.5 6-4.5s5 1.5 6 4.5"/><circle cx="17.5" cy="9" r="2.5"/><path d="M16 14.8c2.6.2 4 1.6 5 4.2"/></svg> 家庭</button>
+      <button class="fchip ${state.calFilter==='me'?'active':''}" onclick="state.calFilter='me';render()"><svg class="ln-ic" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="8" r="4"/><path d="M4.5 20c1.5-3.5 4.5-5 7.5-5s6 1.5 7.5 5"/></svg> 只看我</button>
+    </div>
+    <div class="week">${['日','一','二','三','四','五','六'].map(w=>`<span>${w}</span>`).join('')}</div>
+    <div class="days">
+      ${days.map((c,i)=> c.out ? `<div class="day out"></div>` : `
+        <button class="day ${c.today?'today':''}" onclick="openDay('${c.iso}')">
+          <span class="dnum">${c.d}</span>
+          ${c.ex>0?`<span class="ex">-${Math.round(c.ex)}</span>`:''}
+          ${c.inc>0?`<span class="in">+${Math.round(c.inc)}</span>`:''}
+          ${!c.ex&&!c.inc&&c.has?'<span class="hasdot"></span>':''}
+        </button>`).join('')}
+    </div>
+    <div class="legend"><span><i style="background:var(--red)"></i>支出</span><span><i style="background:var(--brand)"></i>收入</span><span><i style="background:var(--teal)"></i>有记录</span></div>
+    <div style="height:14px"></div>`;
+}
+function calShift(delta){
+  const [y,m] = state.calDate.split('-').map(Number);
+  const nd = new Date(y, m-1+delta, 1);
+  state.calDate = nd.getFullYear()+'-'+String(nd.getMonth()+1).padStart(2,'0')+'-01';
+  render();
+}
+function calToday(){
+  state.calDate = todayStr(); render();
+}
+function openDay(iso){
+  const scope = state.calFilter==='family' ? null : state.member;
+  const txs = TXS.filter(t=>t.date===iso && (!scope || t.member===scope));
+  const ex = txs.filter(t=>t.type==='expense').reduce((s,t)=>s+t.amount,0);
+  const inc = txs.filter(t=>t.type==='income').reduce((s,t)=>s+t.amount,0);
+  $('dayTitle').textContent = fmtDate(iso);
+  $('dayWeek').textContent = weekName(iso) + (state.calFilter==='family'?' · 家庭':' · '+MEMBERS[state.member].name);
+  $('dayExp').textContent = money(ex);
+  $('dayInc').textContent = money(inc);
+  $('dayBal').textContent = money(inc-ex);
+  const catMap = {};
+  txs.filter(t=>t.type==='expense').forEach(t=>{ catMap[t.catName]=(catMap[t.catName]||0)+t.amount; });
+  $('dayCats').innerHTML = Object.entries(catMap).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`<span class="dc-tag"><b>${k}</b>${money(v)}</span>`).join('')
+    || '<span class="dc-tag">当日无支出类目</span>';
+  $('dayTxs').innerHTML = txs.length ? txs.map(t=>`
+      <div class="tx-item">
+        <div class="tx-ic">${CAT_ICON[t.type+':'+t.cat] || (t.type==='transfer-out'?lnIcon('export',16):t.type==='transfer-in'?lnIcon('import',16):lnIcon('other',16))}</div>
+        <div><div class="tn">${t.catName||(t.type==='transfer-out'?'转出':t.type==='transfer-in'?'转入':'其他')}</div>
+        <div class="ts">${acctOf(t.account)?.name||''} · ${t.note||'—'}${state.calFilter==='family'?' · '+MEMBERS[t.member].name:''}</div></div>
+        <div class="tamt ${t.type==='expense'?'down':t.type==='income'?'up':'ink2'}">${t.type==='expense'?'-':t.type==='income'?'+':''}${money(t.amount)}</div>
+      </div>`).join('')
+    : '<div style="text-align:center;color:var(--ink3);font-size:.8rem;padding:18px 0">这一天还没有记账</div>';
+  $('dayMask').classList.add('show');
+}
+function closeDay(){ $('dayMask').classList.remove('show'); }
+
+function pageAccounts(){
+  const bal = memberBal(state.member);
+  const mo = monthStr();
+  const mIn = memberTx(state.member,'income',mo).reduce((s,t)=>s+t.amount,0);
+  const mOut = memberTx(state.member,'expense',mo).reduce((s,t)=>s+t.amount,0);
+  const cc = memberAccts(state.member).filter(a=>a.type==='credit');
+  return `
+    <div class="nav-title">我的账户</div>
+    <div class="nav-sub">${MEMBERS[state.member].name} · 资产独立管理</div>
+    <div class="tot-card">
+      <div class="lbl">资产合计</div>
+      <div class="amt">${money(bal)}</div>
+      <div class="grid">
+        <div class="g"><b>${money(mOut)}</b><span>本月支出</span></div>
+        <div class="g"><b>${money(mIn)}</b><span>本月收入</span></div>
+      </div>
+    </div>
+    ${cc.length?cc.map(c=>`<div class="cc-due"><span style="color:var(--brand-d);display:inline-flex"><svg class="ln-ic" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="M3 10h18M7 15h4"/></svg></span> ${c.name} 本期待还<b>${money(-acctBal(c.id))}</b></div>`).join(''):''}
+    <div class="card">
+      ${memberAccts(state.member).map(a=>{
+        const bal = acctBal(a.id);
+        const moIn = TXS.filter(t=>t.account===a.id&&t.type==='income'&&t.date.startsWith(mo)).reduce((s,t)=>s+t.amount,0);
+        const moOut = TXS.filter(t=>t.account===a.id&&t.type==='expense'&&t.date.startsWith(mo)).reduce((s,t)=>s+t.amount,0);
+        return `
+        <div class="acct-card">
+          <div class="acct-ic" style="background:${a.color}">${ACCOUNT_TYPES[a.type].ic}</div>
+          <div><div class="an">${a.name}</div><div class="as">${ACCOUNT_TYPES[a.type].name} · 本月流入 ${money(moIn)} / 流出 ${money(moOut)}</div></div>
+          <div class="abal"><b class="${bal<0?'down':'up-bg'}">${money(bal)}</b><small>${a.type==='credit'?'待还':ACCOUNT_TYPES[a.type].name}</small></div>
+        </div>`;}).join('')}
+    </div>
+    <button style="width:100%;padding:14px;border-radius:16px;border:1.5px dashed var(--ink3);background:none;color:var(--ink2);font-size:.86rem;cursor:pointer;font-family:inherit" onclick="toast('演示版:新增账户为占位交互')">＋ 新增账户(演示)</button>`;
+}
+
+function pageReports(){
+  const mo = monthStr();
+  const txs = memberTx(state.member,'expense',mo);
+  const total = txs.reduce((s,t)=>s+t.amount,0);
+  const catSum = {};
+  txs.forEach(t=>{ catSum[t.catName]=(catSum[t.catName]||0)+t.amount; });
+  const sorted = Object.entries(catSum).sort((a,b)=>b[1]-a[1]);
+  const colors = ['#ffb3cd','#c1e7dc','#ffd98a','#ff9d9d','#b8d4f0','#dcc9f0','#f2c4d8','#d9ead6','#f0dfb4','#c9cfe0'];
+  const max = sorted.length? sorted[0][1] : 1;
+  const trend = state.member==='dad' ? TREND : MOM_TREND.map((v,i)=>[v[0], v[1], null]);
+  const trendMax = Math.max(...trend.map(v=>v[1]),1);
+  const fam = {};
+  Object.values(MEMBERS).forEach(mm=>{ fam[mm.id] = memberTx(mm.id,'expense',mo).reduce((s,t)=>s+t.amount,0); });
+  return `
+    <div class="nav-title">报表</div>
+    <div class="nav-sub">${MEMBERS[state.member].name} · ${mo.replace('-','年')}月</div>
+    <div class="card card-pad">
+      <div class="rp-title">本月支出排行</div>
+      <div class="rp-sub">共 ${money(total)} · ${sorted.length} 个类目</div>
+      ${sorted.slice(0,6).map(([k,v],i)=>`
+        <div class="bar-item">
+          <span class="bn">${k}</span>
+          <div class="btr"><div class="bfill" style="width:${Math.max(6,v/max*100)}%;background:${colors[i%colors.length]}">${v>max*0.35?money(v):''}</div></div>
+          <span class="bpct">${Math.round(v/total*100)}%</span>
+        </div>`).join('') || '<div style="text-align:center;color:var(--ink3);font-size:.8rem;padding:14px 0">本月暂无支出</div>'}
+    </div>
+    <div class="card card-pad">
+      <div class="rp-title">近 6 个月支出趋势</div>
+      <div class="rp-sub">单位:元</div>
+      <div class="trend">
+        ${trend.map(([label,v])=>`
+          <div class="tcol ${v===trendMax?'hi':''}">
+            <div class="tv">${v>9999?(v/1000).toFixed(0)+'k':v}</div>
+            <div class="tb" style="height:${Math.max(6,v/trendMax*100)}%"></div>
+            <div class="tm">${label}</div>
+          </div>`).join('')}
+      </div>
+    </div>
+    <div class="card card-pad">
+      <div class="rp-title">家庭支出对比</div>
+      <div class="rp-sub">${mo.replace('-','年')}月 · 家庭视角</div>
+      ${Object.values(MEMBERS).map(mm=>{
+        const v = fam[mm.id];
+        const p = Math.round(v/(Object.values(fam).reduce((a,b)=>a+b,0)||1)*100);
+        return `<div class="cmp-row"><div class="cn"><div class="avatar" style="background:${mm.color};width:30px;height:30px;font-size:.8rem">${mm.emoji}</div>${mm.name}</div><span class="camt">${money(v)}</span><span style="width:40px;text-align:right;font-size:.7rem;color:var(--ink3)">${p}%</span></div>`;
+      }).join('')}
+    </div>
+    <div style="height:14px"></div>`;
+}
+
+/* ===== 我的 ===== */
+function pageMe(){
+  const m = MEMBERS[state.member];
+  return `
+    <div class="nav-title">我的</div>
+    <div class="nav-sub">账户、成员与偏好设置</div>
+    <div class="card">
+      <div class="me-head">
+        <div class="avatar avatar-edit" style="background:${m.color}" onclick="toast('头像定制:上传照片/选择默认头像(演示占位)')" title="点击更换头像">${m.emoji}<span class="av-edit">📷</span></div>
+        <div><div class="mn">${m.name}</div><div class="ms">${m.role} · 资产 ${money(memberBal(state.member))}</div></div>
+        <button class="mswitch" onclick="switchMember()">切换成员</button>
+      </div>
+    </div>
+    <div class="card" style="margin-bottom:14px">
+      <button class="cell" onclick="go('plugins')"><span class="ci"><svg class="ln-ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6v4a3 3 0 106 0V3h1a2 2 0 012 2v4a6 6 0 01-6 6H10a6 6 0 01-6-6V5a2 2 0 012-2h3z"/><path d="M10 15v4a2 2 0 11-4 0v-2"/></svg></span><span class="ct">插件中心<div class="cs">幸运小工具 · 花式记账 · 酷炫玩法</div></span><span class="ch">›</span></button>
+      <button class="cell" onclick="toast('演示:管理家庭成员为占位交互')"><span class="ci"><svg class="ln-ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="9" cy="8.5" r="3.5"/><path d="M3 19c1-3 3-4.5 6-4.5s5 1.5 6 4.5"/><circle cx="17.5" cy="9" r="2.5"/><path d="M16 14.8c2.6.2 4 1.6 5 4.2"/></svg></span><span class="ct">家庭成员<div class="cs">当前 ${Object.keys(MEMBERS).length} 人 · 数据独立</div></span><span class="ch">›</span></button>
+      <button class="cell" onclick="toast('隐私模式:切换成员时隐藏对方账户明细(演示占位)')"><span class="ci"><svg class="ln-ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="5" y="10" width="14" height="11" rx="3"/><path d="M8 10V7a4 4 0 018 0v3"/></svg></span><span class="ct">隐私模式<div class="cs">切换成员时隐藏对方账户明细</div></span><span class="cv">开</span></button>
+      <button class="cell" onclick="go('reports')"><span class="ci"><svg class="ln-ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 20V10M10 20V4M15 20v-7M20 20V7"/></svg></span><span class="ct">财务报表<div class="cs">类目排行 · 趋势 · 成员对比</div></span><span class="ch">›</span></button>
+    </div>
+    <div class="card">
+      <button class="cell" onclick="toast('演示:默认账户设置')"><span class="ci"><svg class="ln-ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5v9M9 10c0-1.2 1.3-1.8 3-1.8s3 .6 3 1.8c0 3-6 1.8-6 4.8 0 1.2 1.3 1.8 3 1.8s3-.6 3-1.8"/></svg></span><span class="ct">默认账户<div class="cs">记账时优先选中</div></span><span class="cv">${acctOf(memberAccts(state.member)[0]?.id)?.name||'未设置'}</span></button>
+      <button class="cell" onclick="toast('预算提醒为开关占位')"><span class="ci"><svg class="ln-ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M6 16v-4a6 6 0 0112 0v4l2 3H4l2-3z"/><path d="M10 19a2 2 0 004 0"/></svg></span><span class="ct">预算提醒<div class="cs">本月支出超阈值时提醒</div></span><span class="cv">关</span></button>
+      <button class="cell" onclick="toast('导出 Excel / CSV(演示占位)')"><span class="ci"><svg class="ln-ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 4v10M8 10l4 4 4-4"/><path d="M5 18v1a2 2 0 002 2h10a2 2 0 002-2v-1"/></svg></span><span class="ct">导出账单<div class="cs">Excel / CSV 对账归档</div></span><span class="ch">›</span></button>
+      <button class="cell" onclick="toast('云同步为二期规划')"><span class="ci"><svg class="ln-ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M7 18a4.5 4.5 0 010-9 6 6 0 0111.5-1.5A4 4 0 0118 18H7z"/></svg></span><span class="ct">云同步<div class="cs">跨设备同步(二期)</div></span><span class="cv">二期</span></button>
+      <button class="cell" onclick="toast('luckynest 记账 APP 原型 v1.0 · 2026-09-09')"><span class="ci"><svg class="ln-ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 11v5M12 8h.01"/></svg></span><span class="ct">关于<div class="cs">luckynest 记账 APP 原型 v1.0</div></span><span class="ch">›</span></button>
+    </div>
+    <div style="height:14px"></div>`;
+}
+
+/* 从「我的」进入报表页时需要单独渲染 tab 态 */
+function switchMember(){
+  const other = state.member==='dad' ? 'mom' : 'dad';
+  state.member = other;
+  state.book.account = memberAccts(other)[0]?.id || null;
+  render();
+  toast('已切换为 '+MEMBERS[other].name+' 的身份');
+}
+
+/* ================= 启动 ================= */
+$('noteInput').addEventListener('input', e=> state.book.note = e.target.value);
+$('dateInput').addEventListener('change', e=> state.book.date = e.target.value);
+$('bookMask').addEventListener('transitionend', e=>{ if(!e.target.classList.contains('show')) renderBook(); });
+renderSplash();
+</script>
+</body>
+</html>
