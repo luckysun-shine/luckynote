@@ -1,22 +1,43 @@
 :root {
+  /* Layer 1 — brand primitives (luckynest lavender) */
   --bg: #f7f5fc;
   --paper: #ffffff;
   --ground: var(--bg);
   --ink: #262038;
-  --ink2: #6e6485;
-  --ink3: #a79cc0;
+  --ink2: #5c536e; /* AA ≥4.5 on bg/white */
+  --ink3: #706788; /* was #a79cc0 — failed AA */
   --muted: var(--ink2);
   --line: #efeaf6;
   --brand: #c8a4f0;
-  --brand-d: #8f6fd6;
+  --brand-d: #7450c4; /* darkened for white-on-brand AA */
+  --brand-mid: #8f6fd6;
   --brand-l: #f3edfc;
   --teal: #c1e7dc;
   --teal-d: #2e9e78;
   --amber: #ffd98a;
   --red: #ff9d9d;
-  --red-d: #e07070;
+  --red-d: #d45a5a; /* slightly deeper for amount contrast */
   --blue: #b8d4f0;
   --purple: #dcc9f0;
+
+  /* Layer 2 — type & space scale (8px / 1.25) */
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-base: 1rem;
+  --text-lg: 1.25rem;
+  --text-xl: 1.563rem;
+  --text-2xl: 1.953rem;
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2rem;
+  --radius-sm: 12px;
+  --radius-md: 16px;
+  --radius-lg: 22px;
+  --touch: 44px;
+
   /* legacy aliases for existing class names */
   --cream: var(--bg);
   --coral: var(--brand);
@@ -26,16 +47,16 @@
   --butter: var(--amber);
   --blush: #f0d9e8;
   --seal: var(--brand-d);
-  --seal-deep: #7450c4;
+  --seal-deep: #5f3fa8;
   --celadon: var(--teal-d);
   --celadon-soft: var(--teal);
   --gold: #d4a017;
-  --shadow: 0 6px 22px -12px rgba(70, 55, 110, 0.2), 0 2px 6px rgba(70, 55, 110, 0.06);
-  --radius: 18px;
+  --shadow: 0 6px 22px -12px rgba(70, 55, 110, 0.18), 0 2px 6px rgba(70, 55, 110, 0.05);
+  --radius: var(--radius-md);
   --tabbar-h: 64px;
   --focus: var(--brand-d);
-  --duration: 180ms;
-  --ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --duration: 160ms;
+  --ease: cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .sr-only {
@@ -68,17 +89,16 @@ html {
 }
 
 body {
-  font-family: "Nunito", -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Helvetica Neue",
-    "Microsoft YaHei", sans-serif;
+  font-family: "Nunito", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
   background:
-    radial-gradient(900px 500px at 80% -10%, rgba(255, 179, 205, 0.16), transparent 55%),
-    radial-gradient(700px 400px at -10% 110%, rgba(184, 212, 240, 0.14), transparent 55%),
-    #f0efec;
+    radial-gradient(900px 500px at 82% -8%, rgba(255, 179, 205, 0.18), transparent 58%),
+    radial-gradient(720px 420px at -12% 108%, rgba(184, 212, 240, 0.16), transparent 58%),
+    var(--bg);
   color: var(--ink);
   -webkit-font-smoothing: antialiased;
   overflow-x: hidden;
   line-height: 1.55;
-  font-weight: 600;
+  font-weight: 500;
 }
 
 :focus-visible {
@@ -334,7 +354,7 @@ button {
   padding: 28px 24px 22px;
   border-radius: 18px;
   background:
-    linear-gradient(145deg, rgba(185, 28, 28, 0.08), transparent 42%),
+    linear-gradient(145deg, rgba(143, 111, 214, 0.08), transparent 42%),
     var(--paper);
   border: 1px solid rgba(22, 25, 31, 0.08);
   box-shadow: var(--shadow);
@@ -348,10 +368,10 @@ button {
   top: 16px;
   width: 52px;
   height: 52px;
-  border: 2px solid rgba(185, 28, 28, 0.35);
+  border: 2px solid rgba(143, 111, 214, 0.35);
   border-radius: 8px;
-  color: rgba(185, 28, 28, 0.45);
-  font-family: "ZCOOL XiaoWei", serif;
+  color: rgba(143, 111, 214, 0.55);
+  font-family: inherit;
   font-size: 28px;
   display: grid;
   place-items: center;
@@ -369,7 +389,7 @@ button {
 
 .balance-figure {
   margin: 8px 0 18px;
-  font-family: "ZCOOL XiaoWei", serif;
+  font-family: inherit;
   font-size: clamp(40px, 8vw, 56px);
   line-height: 1;
   font-weight: 400;
@@ -417,7 +437,7 @@ button {
 .card.coral {
   background: var(--paper);
   color: var(--ink);
-  border-color: rgba(185, 28, 28, 0.22);
+  border-color: rgba(143, 111, 214, 0.22);
 }
 
 .card.coral .label {
@@ -504,7 +524,7 @@ button {
 
 .tx.editable:hover,
 .tx.editable:focus-visible {
-  background: rgba(185, 28, 28, 0.06);
+  background: rgba(143, 111, 214, 0.06);
 }
 
 .tx-edit-hint {
@@ -710,14 +730,14 @@ button {
 
 .btn {
   border: 0;
-  background: linear-gradient(135deg, var(--brand-d), #a884e8);
+  background: linear-gradient(135deg, var(--seal-deep), var(--brand-d));
   color: #fff;
   padding: 12px 18px;
-  min-height: 44px;
-  border-radius: 16px;
+  min-height: var(--touch);
+  border-radius: var(--radius-md);
   font-weight: 800;
   cursor: pointer;
-  box-shadow: 0 10px 22px -8px rgba(143, 111, 214, 0.55);
+  box-shadow: 0 10px 22px -8px rgba(95, 63, 168, 0.45);
   transition:
     transform var(--duration) var(--ease),
     box-shadow var(--duration) var(--ease),
@@ -725,8 +745,8 @@ button {
 }
 
 .btn:hover:not(:disabled) {
-  background: linear-gradient(135deg, #7a58c4, var(--brand-d));
-  box-shadow: 0 12px 26px -8px rgba(143, 111, 214, 0.65);
+  background: linear-gradient(135deg, #553894, var(--seal-deep));
+  box-shadow: 0 12px 26px -8px rgba(95, 63, 168, 0.55);
 }
 
 .btn:active:not(:disabled) {
@@ -841,8 +861,8 @@ textarea {
 input:focus-visible,
 select:focus-visible,
 textarea:focus-visible {
-  border-color: rgba(185, 28, 28, 0.55);
-  box-shadow: 0 0 0 4px rgba(185, 28, 28, 0.14);
+  border-color: rgba(143, 111, 214, 0.55);
+  box-shadow: 0 0 0 4px rgba(143, 111, 214, 0.18);
   outline: none;
 }
 
@@ -1007,8 +1027,8 @@ textarea {
 
 .login-field input:focus {
   outline: none;
-  border-color: rgba(185, 28, 28, 0.55);
-  box-shadow: 0 0 0 4px rgba(185, 28, 28, 0.14);
+  border-color: rgba(143, 111, 214, 0.55);
+  box-shadow: 0 0 0 4px rgba(143, 111, 214, 0.18);
 }
 
 .login-field input:disabled {
@@ -1041,7 +1061,7 @@ textarea {
 }
 
 .login-eye:hover {
-  background: rgba(185, 28, 28, 0.1);
+  background: rgba(143, 111, 214, 0.12);
 }
 
 .login-submit {
@@ -1256,7 +1276,7 @@ textarea {
 }
 
 .cal-title {
-  font-family: "ZCOOL XiaoWei", serif;
+  font-family: inherit;
   font-size: 22px;
   font-weight: 400;
 }
@@ -1314,7 +1334,7 @@ textarea {
 }
 
 .cal-cell.on {
-  background: rgba(185, 28, 28, 0.12);
+  background: rgba(143, 111, 214, 0.12);
   border-color: var(--coral);
 }
 
@@ -1397,7 +1417,7 @@ textarea {
 .cal-month-card strong {
   display: block;
   margin-bottom: 6px;
-  font-family: "ZCOOL XiaoWei", serif;
+  font-family: inherit;
   font-size: 18px;
   font-weight: 400;
 }
@@ -1512,7 +1532,7 @@ textarea {
 
 .me-hero-text strong {
   font-size: 20px;
-  font-family: "ZCOOL XiaoWei", serif;
+  font-family: inherit;
   font-weight: 400;
 }
 
@@ -1566,7 +1586,7 @@ textarea {
 
 .me-row:hover,
 .me-row:active {
-  background: rgba(185, 28, 28, 0.06);
+  background: rgba(143, 111, 214, 0.06);
 }
 
 .me-row-text {
@@ -2072,29 +2092,42 @@ textarea {
 }
 
 .icon-chip {
-  width: 34px;
-  height: 34px;
+  width: var(--touch);
+  height: var(--touch);
   border-radius: 50%;
   background: #fff;
   box-shadow: var(--shadow);
   display: grid;
   place-items: center;
   font-size: 0.95rem;
-  border: none;
+  border: 1px solid rgba(0, 0, 0, 0.04);
   cursor: pointer;
   color: var(--ink2);
+  transition: background var(--duration) var(--ease), color var(--duration) var(--ease);
+}
+
+.icon-chip:hover {
+  background: var(--brand-l);
+  color: var(--brand-d);
 }
 
 .search-bar {
   display: flex;
   align-items: center;
-  gap: 8px;
-  background: #f2f1ee;
-  border-radius: 14px;
+  gap: var(--space-2);
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
   padding: 4px 14px;
   margin: 10px 0 16px;
   color: var(--ink3);
-  font-size: 0.84rem;
+  font-size: var(--text-sm);
+  transition: border-color var(--duration) var(--ease), box-shadow var(--duration) var(--ease);
+}
+
+.search-bar:focus-within {
+  border-color: var(--brand-mid);
+  box-shadow: 0 0 0 3px rgba(143, 111, 214, 0.18);
 }
 
 .search-bar input {
@@ -2103,6 +2136,8 @@ textarea {
   min-height: 40px;
   padding: 0;
   box-shadow: none;
+  color: var(--ink);
+  font-weight: 600;
 }
 
 .search-bar input:focus-visible {
@@ -2167,7 +2202,7 @@ textarea {
   width: 34px;
   height: 34px;
   border-radius: 50%;
-  background: var(--brand);
+  background: var(--brand-d);
   color: #fff;
   display: grid;
   place-items: center;
@@ -2194,6 +2229,8 @@ textarea {
   background: var(--bg);
   border-radius: 12px;
   padding: 8px 9px;
+  border: 0;
+  box-shadow: none;
 }
 
 .today-hero .g-cell b {
