@@ -343,8 +343,14 @@ function Login({ onLogin, show, toast }) {
     <div className="login-wrap">
       <div className="login-stage">
         <header className="login-hero">
-          <img className="login-mark" src="/brand/luckynest-mark.svg" alt="luckynest" width="88" height="88" />
-          <h1 className="brand-cn login-brand">{BRAND_NAME}</h1>
+          <h1 className="sr-only">{BRAND_NAME}</h1>
+          <img
+            className="login-logo"
+            src="/brand/luckynest-logo.svg"
+            alt="luckynest"
+            width="168"
+            height="168"
+          />
           <p className="login-tagline">{BRAND_TAGLINE}</p>
         </header>
 
