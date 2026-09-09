@@ -1,3 +1,5 @@
+.mobile-only { display: none !important; }
+
 :root {
   /* Layer 1 — brand primitives (luckynest lavender) */
   --bg: #f7f5fc;
@@ -662,8 +664,9 @@ button {
 }
 
 .btn-sm {
-  padding: 8px 12px;
-  min-height: 36px;
+  padding: 10px 14px;
+  min-height: var(--touch);
+  min-width: var(--touch);
   font-size: 13px;
 }
 
@@ -689,12 +692,15 @@ button {
   place-items: center;
   z-index: 30;
   padding: 16px;
+  overscroll-behavior: contain;
+  touch-action: none;
 }
 
 .modal {
   width: min(420px, 100%);
   max-height: 90vh;
   overflow: auto;
+  overscroll-behavior: contain;
 }
 
 .modal-actions {
@@ -981,11 +987,13 @@ textarea {
   font-size: 0.8rem;
   color: var(--ink2);
   font-weight: 600;
+  min-height: var(--touch);
 }
 
 .login-remember input {
-  width: auto;
-  min-height: 0;
+  width: 20px;
+  height: 20px;
+  min-height: 20px;
   accent-color: var(--brand-d);
 }
 
@@ -1047,17 +1055,22 @@ textarea {
 
 .login-eye {
   position: absolute;
-  right: 8px;
+  right: 4px;
   top: 50%;
   transform: translateY(-50%);
   border: 0;
   background: transparent;
-  color: var(--coral-deep);
+  color: var(--brand-d);
   font-size: 13px;
   font-weight: 700;
-  padding: 8px 10px;
+  min-height: var(--touch);
+  min-width: var(--touch);
+  padding: 8px 12px;
   border-radius: 10px;
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .login-eye:hover {
@@ -1245,7 +1258,7 @@ textarea {
   color: #fff;
   padding: 12px 16px;
   border-radius: 14px;
-  z-index: 20;
+  z-index: 50;
   max-width: calc(100vw - 32px);
   box-shadow: 0 12px 32px rgba(22, 25, 31, 0.22);
   animation: login-rise 0.35s var(--ease) both;
@@ -1664,6 +1677,7 @@ textarea {
   gap: 8px;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
+  touch-action: pan-x;
   scrollbar-width: none;
   padding: 2px 2px 6px;
   min-width: 0;
@@ -1747,7 +1761,7 @@ textarea {
     position: sticky;
     top: 0;
     z-index: 8;
-    background: rgba(232, 237, 230, 0.92);
+    background: rgba(247, 245, 252, 0.92);
     backdrop-filter: blur(14px);
   }
 
@@ -1845,7 +1859,8 @@ textarea {
   }
 
   .tab.fab.on .tab-icon {
-    background: #111;
+    background: var(--brand-d);
+    box-shadow: 0 10px 22px -6px rgba(95, 63, 168, 0.55);
   }
 
   .tab.on {
@@ -1869,7 +1884,7 @@ textarea {
   }
 
   .main {
-    padding: 12px 16px calc(var(--tabbar-h) + env(safe-area-inset-bottom, 0px) + 12px);
+    padding: 12px 16px calc(var(--tabbar-h) + env(safe-area-inset-bottom, 0px) + 36px);
     overflow-x: hidden;
   }
 
@@ -1963,12 +1978,17 @@ textarea {
 
   .cal-cell {
     min-height: 58px;
-    padding: 4px 2px;
+    min-width: 0;
+    padding: 6px 2px;
     border-radius: 10px;
   }
 
+  .cal-cell:active {
+    background: var(--brand-l);
+  }
+
   .cal-amounts {
-    font-size: 9px;
+    font-size: 10px;
   }
 
   .cal-year-grid {
@@ -2020,7 +2040,33 @@ textarea {
   .toast {
     left: 16px;
     right: 16px;
-    bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom, 0px) + 6px);
+    bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom, 0px) + 28px);
+  }
+
+  .modal-backdrop {
+    align-items: end;
+    place-items: end center;
+    padding: 0;
+  }
+
+  .modal {
+    width: 100%;
+    max-width: 100%;
+    max-height: min(88vh, 720px);
+    border-radius: 22px 22px 0 0;
+    margin: 0;
+    padding-bottom: max(16px, env(safe-area-inset-bottom, 0px));
+  }
+
+  .tx.editable:active {
+    background: var(--brand-l);
+  }
+
+  .filter-chip:active,
+  .icon-chip:active,
+  .me-row:active,
+  .quick-cell:active {
+    transform: scale(0.98);
   }
 
   .member-pill {
@@ -2320,13 +2366,19 @@ textarea {
 }
 
 .h-row .more {
-  font-size: 0.76rem;
+  font-size: var(--text-sm);
   color: var(--brand-d);
   font-weight: 700;
   background: none;
   border: none;
   cursor: pointer;
   font-family: inherit;
+  min-height: var(--touch);
+  min-width: var(--touch);
+  padding: 0 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .acct-item {
@@ -2498,4 +2550,11 @@ textarea {
 .nav button:hover {
   background: #fff;
   color: var(--brand-d);
+}
+
+
+.field-block {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }

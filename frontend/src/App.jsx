@@ -122,6 +122,22 @@ function canEditTx(me, t) {
   return t.user_id === me.user.id;
 }
 
+/** Lock page scroll while a mobile modal/sheet is open (iOS-safe). */
+function useBodyScrollLock(locked) {
+  useEffect(() => {
+    if (!locked) return undefined;
+    const body = document.body;
+    const prevOverflow = body.style.overflow;
+    const prevTouch = body.style.touchAction;
+    body.style.overflow = "hidden";
+    body.style.touchAction = "none";
+    return () => {
+      body.style.overflow = prevOverflow;
+      body.style.touchAction = prevTouch;
+    };
+  }, [locked]);
+}
+
 function money(n) {
   return Number(n || 0).toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
@@ -248,10 +264,10 @@ export default function App() {
       </aside>
       <main className="main">
         <div className="page-stack">
-        {page === "home" && <Home token={token} me={me} go={setPage} />}
+        {page === "home" && <Home token={token} me={me} go={setPage} show={show} />}
         {page === "books" && <Books token={token} me={me} show={show} />}
         {page === "calendar" && <CalendarPage token={token} me={me} show={show} go={setPage} />}
-        {page === "add" && <Add token={token} show={show} />}
+        {page === "add" && <Add token={token} show={show} go={setPage} />}
         {page === "accounts" && <AccountsHome token={token} me={me} show={show} openSettings={openSettings} />}
         {page === "biz" && <Biz token={token} me={me} show={show} />}
         {page === "budget" && <Budget token={token} show={show} />}
@@ -367,7 +383,6 @@ function Login({ onLogin, show, toast }) {
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               disabled={busy}
-              autoFocus
             />
           </label>
 
@@ -388,7 +403,6 @@ function Login({ onLogin, show, toast }) {
                 className="login-eye"
                 onClick={() => setShowPassword((v) => !v)}
                 aria-label={showPassword ? "隐藏密码" : "显示密码"}
-                tabIndex={-1}
               >
                 {showPassword ? "隐藏" : "显示"}
               </button>
@@ -560,6 +574,9 @@ function CalendarPage({ token, me, show, go }) {
   const [yearData, setYearData] = useState(null);
   const [selectedDay, setSelectedDay] = useState(null);
   const [dayRows, setDayRows] = useState([]);
+  const [dayTick, setDayTick] = useState(0);
+  const [editTx, setEditTx] = useState(null);
+  const [txMeta, setTxMeta] = useState({ ledgers: [], accounts: [], cats: [] });
 
   const personQs = personId ? `&owner_user_id=${personId}` : "";
   const visibleMembers = members.filter((m) => me?.user.role === "owner" || m.id === me?.user.id);
@@ -568,6 +585,35 @@ function CalendarPage({ token, me, show, go }) {
   useEffect(() => {
     api("/api/v1/members", { token }).then(setMembers).catch(() => {});
   }, [token]);
+
+  useEffect(() => {
+    Promise.all([
+      api("/api/v1/ledgers", { token }),
+      api("/api/v1/accounts", { token }),
+      api("/api/v1/categories", { token }),
+    ]).then(([l, a, c]) => setTxMeta({ ledgers: l, accounts: a, cats: c }));
+  }, [token]);
+
+  function refreshCalendarLists() {
+    setDayTick((n) => n + 1);
+    if (mode === "month") {
+      api(`/api/v1/calendar/month?year=${year}&month=${month}&scope=${scope}${personQs}`, { token })
+        .then(setMonthData)
+        .catch(() => {});
+    }
+  }
+
+  async function deleteDayTx(t) {
+    if (!window.confirm("确定删除这笔流水？删除后无法恢复。")) return;
+    try {
+      await api(`/api/v1/transactions/${t.id}`, { token, method: "DELETE" });
+      show("流水已删除");
+      setEditTx(null);
+      refreshCalendarLists();
+    } catch (err) {
+      show(err.message);
+    }
+  }
 
   useEffect(() => {
     if (mode !== "month") return;
@@ -620,7 +666,7 @@ function CalendarPage({ token, me, show, go }) {
         }
       })
       .catch((err) => show(err.message));
-  }, [token, year, month, selectedDay, scope, personId, mode]);
+  }, [token, year, month, selectedDay, scope, personId, mode, dayTick]);
 
   function shiftMonth(delta) {
     let y = year;
@@ -783,7 +829,12 @@ function CalendarPage({ token, me, show, go }) {
               </p>
             )}
             {dayRows.map((t) => (
-              <TxRow key={t.id} t={t} />
+              <TxRow
+                key={t.id}
+                t={t}
+                canEdit={canEditTx(me, t)}
+                onEdit={(row) => setEditTx(row)}
+              />
             ))}
           </div>
         </>
@@ -851,19 +902,60 @@ function CalendarPage({ token, me, show, go }) {
           </div>
         </>
       )}
+
+      {editTx && (
+        <TxEditModal
+          tx={editTx}
+          token={token}
+          me={me}
+          ledgers={txMeta.ledgers}
+          accounts={txMeta.accounts}
+          cats={txMeta.cats}
+          show={show}
+          onClose={() => setEditTx(null)}
+          onSaved={() => refreshCalendarLists()}
+          onDelete={deleteDayTx}
+        />
+      )}
     </div>
   );
 }
 
-function Home({ token, me, go }) {
+function Home({ token, me, go, show }) {
   const [dash, setDash] = useState(null);
   const [accounts, setAccounts] = useState([]);
   const [q, setQ] = useState("");
+  const [editTx, setEditTx] = useState(null);
+  const [txMeta, setTxMeta] = useState({ ledgers: [], accounts: [], cats: [] });
 
-  useEffect(() => {
+  function reloadHome() {
     api("/api/v1/dashboard", { token }).then(setDash);
     api("/api/v1/accounts", { token }).then(setAccounts).catch(() => setAccounts([]));
+  }
+
+  useEffect(() => {
+    reloadHome();
   }, [token]);
+
+  useEffect(() => {
+    Promise.all([
+      api("/api/v1/ledgers", { token }),
+      api("/api/v1/accounts", { token }),
+      api("/api/v1/categories", { token }),
+    ]).then(([l, a, c]) => setTxMeta({ ledgers: l, accounts: a, cats: c }));
+  }, [token]);
+
+  async function deleteHomeTx(t) {
+    if (!window.confirm("确定删除这笔流水？删除后无法恢复。")) return;
+    try {
+      await api(`/api/v1/transactions/${t.id}`, { token, method: "DELETE" });
+      show("流水已删除");
+      setEditTx(null);
+      reloadHome();
+    } catch (err) {
+      show(err.message);
+    }
+  }
 
   if (!dash) return <p className="muted">正在打开账本…</p>;
 
@@ -894,7 +986,7 @@ function Home({ token, me, go }) {
             ◎
           </button>
           <button type="button" className="icon-chip" onClick={() => go("me")} aria-label="我的">
-            ✎
+            ●
           </button>
         </div>
       </div>
@@ -1039,7 +1131,12 @@ function Home({ token, me, go }) {
         </div>
         <div className="list" style={{ paddingBottom: 8 }}>
           {recent.map((t) => (
-            <TxRow key={t.id} t={t} />
+            <TxRow
+              key={t.id}
+              t={t}
+              canEdit={canEditTx(me, t)}
+              onEdit={(row) => setEditTx(row)}
+            />
           ))}
           {recent.length === 0 && <div className="empty-state" style={{ margin: 12 }}>暂无匹配账单</div>}
         </div>
@@ -1077,6 +1174,21 @@ function Home({ token, me, go }) {
           </div>
         </div>
       </div>
+
+      {editTx && (
+        <TxEditModal
+          tx={editTx}
+          token={token}
+          me={me}
+          ledgers={txMeta.ledgers}
+          accounts={txMeta.accounts}
+          cats={txMeta.cats}
+          show={show}
+          onClose={() => setEditTx(null)}
+          onSaved={() => reloadHome()}
+          onDelete={deleteHomeTx}
+        />
+      )}
     </div>
   );
 }
@@ -1197,6 +1309,7 @@ function TxEditModal({ tx, token, me, ledgers, accounts, cats, onClose, onSaved,
   const filteredCats = cats.filter(
     (c) => c.kind === form.type && (!ledger || c.ledger_type === ledger.type)
   );
+  useBodyScrollLock(true);
 
   useEffect(() => {
     setForm(txFormFromRow(tx));
@@ -1458,7 +1571,7 @@ function Books({ token, me, show }) {
   );
 }
 
-function Add({ token, show }) {
+function Add({ token, show, go }) {
   const [ledgers, setLedgers] = useState([]);
   const [accounts, setAccounts] = useState([]);
   const [cats, setCats] = useState([]);
@@ -1506,6 +1619,7 @@ function Add({ token, show }) {
       });
       show("窝窝记下了 ✓");
       setForm((f) => ({ ...f, amount: "", note: "" }));
+      if (typeof go === "function") go("home");
     } catch (err) {
       show(err.message);
     }
@@ -1517,6 +1631,11 @@ function Add({ token, show }) {
           <h2 className="hello">记一笔</h2>
           <p className="sub">选类型、金额与账本，轻轻记下。</p>
         </div>
+        {typeof go === "function" && (
+          <button type="button" className="btn ghost btn-sm mobile-only" onClick={() => go("home")}>
+            取消
+          </button>
+        )}
       </div>
       <form className="card form-grid add-form" onSubmit={submit}>
         <div style={{ gridColumn: "1 / -1" }}>
@@ -1541,8 +1660,8 @@ function Add({ token, show }) {
             required
           />
         </label>
-        <label style={{ gridColumn: "1 / -1" }}>
-          账本
+        <div className="field-block" style={{ gridColumn: "1 / -1" }}>
+          <span className="cat-label">账本</span>
           <FilterBar>
             {ledgers.map((l) => (
               <FilterChip
@@ -1556,7 +1675,7 @@ function Add({ token, show }) {
               </FilterChip>
             ))}
           </FilterBar>
-        </label>
+        </div>
         <label style={{ gridColumn: "1 / -1" }}>
           账户
           <select value={form.account_id} onChange={(e) => setForm({ ...form, account_id: e.target.value })}>
@@ -1586,7 +1705,7 @@ function Add({ token, show }) {
           <input value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} placeholder="午饭 / 客户尾款 / 水电…" />
         </label>
         <button className="btn add-submit" style={{ gridColumn: "1 / -1" }}>
-          保存
+          保存这笔
         </button>
       </form>
     </div>
