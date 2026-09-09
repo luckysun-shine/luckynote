@@ -1959,6 +1959,10 @@ textarea {
     display: none;
   }
 
+  .mobile-only {
+    display: inline-flex !important;
+  }
+
   .stats {
     grid-template-columns: 1fr 1fr;
   }
