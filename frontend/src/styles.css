@@ -2562,3 +2562,24 @@ textarea {
   flex-direction: column;
   gap: 8px;
 }
+
+.text-link {
+  border: 0;
+  background: transparent;
+  color: var(--brand-d);
+  font-family: inherit;
+  font-size: var(--text-sm);
+  font-weight: 800;
+  min-height: var(--touch);
+  min-width: var(--touch);
+  padding: 0 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.text-link:active {
+  opacity: 0.7;
+}

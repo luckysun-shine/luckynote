@@ -1632,7 +1632,7 @@ function Add({ token, show, go }) {
           <p className="sub">选类型、金额与账本，轻轻记下。</p>
         </div>
         {typeof go === "function" && (
-          <button type="button" className="btn ghost btn-sm" onClick={() => go("home")}>
+          <button type="button" className="text-link" onClick={() => go("home")}>
             取消
           </button>
         )}
