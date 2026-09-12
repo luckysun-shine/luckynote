@@ -693,14 +693,17 @@ button {
   z-index: 30;
   padding: 16px;
   overscroll-behavior: contain;
-  touch-action: none;
+  /* Do not use touch-action:none here — it blocks sheet scrolling on mobile. */
+  touch-action: manipulation;
 }
 
 .modal {
   width: min(420px, 100%);
-  max-height: 90vh;
+  max-height: min(90dvh, 90vh);
   overflow: auto;
   overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
 }
 
 .modal-actions {
@@ -2082,7 +2085,7 @@ textarea {
   .modal {
     width: 100%;
     max-width: 100%;
-    max-height: min(88vh, 720px);
+    max-height: min(88dvh, 88vh, 720px);
     border-radius: 22px 22px 0 0;
     margin: 0;
     padding-bottom: max(16px, env(safe-area-inset-bottom, 0px));
@@ -2091,9 +2094,13 @@ textarea {
   .add-sheet {
     width: 100%;
     max-width: 100%;
-    max-height: min(90vh, 780px);
+    max-height: min(92dvh, 92vh, 820px);
     border-radius: 22px 22px 0 0;
-    padding: 16px 16px max(20px, env(safe-area-inset-bottom, 0px));
+    padding: 16px 16px 0;
+  }
+
+  .add-sheet-foot {
+    padding-bottom: max(12px, env(safe-area-inset-bottom, 0px));
   }
 
   .add-sheet-cancel {
@@ -2619,12 +2626,13 @@ textarea {
 
 .add-sheet {
   width: min(480px, 100%);
-  max-height: min(92vh, 760px);
-  overflow: auto;
-  padding: 18px 18px 20px;
+  max-height: min(92dvh, 92vh, 760px);
+  overflow: hidden;
+  padding: 18px 18px 0;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 0;
+  touch-action: pan-y;
 }
 
 .add-sheet-head {
@@ -2632,7 +2640,32 @@ textarea {
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
-  padding-right: 4px;
+  padding: 0 4px 12px;
+  flex-shrink: 0;
+}
+
+.add-sheet-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+  padding-bottom: 8px;
+}
+
+.add-sheet-foot {
+  flex-shrink: 0;
+  padding: 12px 0 max(16px, env(safe-area-inset-bottom, 0px));
+  background: #fff;
+  border-top: 1px solid rgba(22, 25, 31, 0.06);
+}
+
+.add-sheet-foot .add-submit,
+.add-sheet-foot .btn {
+  width: 100%;
+  min-height: var(--touch);
 }
 
 .add-sheet-title {

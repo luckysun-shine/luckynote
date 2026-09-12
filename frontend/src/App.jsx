@@ -127,13 +127,25 @@ function useBodyScrollLock(locked) {
   useEffect(() => {
     if (!locked) return undefined;
     const body = document.body;
-    const prevOverflow = body.style.overflow;
-    const prevTouch = body.style.touchAction;
+    const html = document.documentElement;
+    const scrollY = window.scrollY;
+    const prevBodyOverflow = body.style.overflow;
+    const prevHtmlOverflow = html.style.overflow;
+    const prevBodyPosition = body.style.position;
+    const prevBodyTop = body.style.top;
+    const prevBodyWidth = body.style.width;
     body.style.overflow = "hidden";
-    body.style.touchAction = "none";
+    html.style.overflow = "hidden";
+    body.style.position = "fixed";
+    body.style.top = `-${scrollY}px`;
+    body.style.width = "100%";
     return () => {
-      body.style.overflow = prevOverflow;
-      body.style.touchAction = prevTouch;
+      body.style.overflow = prevBodyOverflow;
+      html.style.overflow = prevHtmlOverflow;
+      body.style.position = prevBodyPosition;
+      body.style.top = prevBodyTop;
+      body.style.width = prevBodyWidth;
+      window.scrollTo(0, scrollY);
     };
   }, [locked]);
 }
@@ -1711,79 +1723,83 @@ function AddSheet({ token, show, onClose }) {
           </button>
         </div>
 
-        <div className="form-grid add-form">
-          <div style={{ gridColumn: "1 / -1" }}>
-            <Segmented
-              value={form.type}
-              options={[
-                ["expense", "支出"],
-                ["income", "收入"],
-              ]}
-              onChange={(type) => setForm({ ...form, type, category_id: "" })}
-            />
-          </div>
-          <label className="amount-field" style={{ gridColumn: "1 / -1" }}>
-            金额
-            <input
-              type="text"
-              inputMode="decimal"
-              pattern="[0-9]*[.]?[0-9]*"
-              value={form.amount}
-              onChange={(e) => setForm({ ...form, amount: e.target.value.replace(/[^\d.]/g, "") })}
-              placeholder="0.00"
-              required
-              autoFocus
-            />
-          </label>
-          <div className="field-block" style={{ gridColumn: "1 / -1" }}>
-            <span className="cat-label">账本</span>
-            <div className="chip-wrap">
-              {ledgers.map((l) => (
-                <FilterChip
-                  key={l.id}
-                  active={String(form.ledger_id) === String(l.id)}
-                  onClick={() => setForm({ ...form, ledger_id: l.id, category_id: "" })}
-                  className="ledger-filter"
-                >
-                  <LedgerThumb ledger={l} size={20} />
-                  {l.name}
-                </FilterChip>
-              ))}
+        <div className="add-sheet-body">
+          <div className="form-grid add-form">
+            <div style={{ gridColumn: "1 / -1" }}>
+              <Segmented
+                value={form.type}
+                options={[
+                  ["expense", "支出"],
+                  ["income", "收入"],
+                ]}
+                onChange={(type) => setForm({ ...form, type, category_id: "" })}
+              />
             </div>
-          </div>
-          <label style={{ gridColumn: "1 / -1" }}>
-            账户
-            <select value={form.account_id} onChange={(e) => setForm({ ...form, account_id: e.target.value })}>
-              {accounts.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.name} · {accountKindLabel(a.kind)}
-                </option>
-              ))}
-            </select>
-          </label>
-          <div className="cat-block" style={{ gridColumn: "1 / -1" }}>
-            <span className="cat-label">分类</span>
-            <div className="chip-wrap">
-              {filteredCats.map((c) => (
-                <FilterChip
-                  key={c.id}
-                  active={String(form.category_id || filteredCats[0]?.id) === String(c.id)}
-                  onClick={() => setForm({ ...form, category_id: c.id })}
-                >
-                  {c.icon} {c.name}
-                </FilterChip>
-              ))}
+            <label className="amount-field" style={{ gridColumn: "1 / -1" }}>
+              金额
+              <input
+                type="text"
+                inputMode="decimal"
+                pattern="[0-9]*[.]?[0-9]*"
+                value={form.amount}
+                onChange={(e) => setForm({ ...form, amount: e.target.value.replace(/[^\d.]/g, "") })}
+                placeholder="0.00"
+                required
+              />
+            </label>
+            <div className="field-block" style={{ gridColumn: "1 / -1" }}>
+              <span className="cat-label">账本</span>
+              <div className="chip-wrap">
+                {ledgers.map((l) => (
+                  <FilterChip
+                    key={l.id}
+                    active={String(form.ledger_id) === String(l.id)}
+                    onClick={() => setForm({ ...form, ledger_id: l.id, category_id: "" })}
+                    className="ledger-filter"
+                  >
+                    <LedgerThumb ledger={l} size={20} />
+                    {l.name}
+                  </FilterChip>
+                ))}
+              </div>
             </div>
+            <label style={{ gridColumn: "1 / -1" }}>
+              账户
+              <select value={form.account_id} onChange={(e) => setForm({ ...form, account_id: e.target.value })}>
+                {accounts.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.name} · {accountKindLabel(a.kind)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <div className="cat-block" style={{ gridColumn: "1 / -1" }}>
+              <span className="cat-label">分类</span>
+              <div className="chip-wrap">
+                {filteredCats.map((c) => (
+                  <FilterChip
+                    key={c.id}
+                    active={String(form.category_id || filteredCats[0]?.id) === String(c.id)}
+                    onClick={() => setForm({ ...form, category_id: c.id })}
+                  >
+                    {c.icon} {c.name}
+                  </FilterChip>
+                ))}
+              </div>
+            </div>
+            <label style={{ gridColumn: "1 / -1" }}>
+              备注
+              <input
+                value={form.note}
+                onChange={(e) => setForm({ ...form, note: e.target.value })}
+                placeholder="午饭 / 客户尾款 / 水电…"
+              />
+            </label>
           </div>
-          <label style={{ gridColumn: "1 / -1" }}>
-            备注
-            <input
-              value={form.note}
-              onChange={(e) => setForm({ ...form, note: e.target.value })}
-              placeholder="午饭 / 客户尾款 / 水电…"
-            />
-          </label>
-          <button className="btn add-submit" style={{ gridColumn: "1 / -1" }}>
+        </div>
+
+        <div className="add-sheet-foot">
+          <button className="btn add-submit" type="submit">
             保存这笔
           </button>
         </div>
