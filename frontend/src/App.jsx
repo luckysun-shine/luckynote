@@ -122,6 +122,34 @@ function canEditTx(me, t) {
   return t.user_id === me.user.id;
 }
 
+/** Lock page scroll while a mobile modal/sheet is open (iOS-safe). */
+function useBodyScrollLock(locked) {
+  useEffect(() => {
+    if (!locked) return undefined;
+    const body = document.body;
+    const html = document.documentElement;
+    const scrollY = window.scrollY;
+    const prevBodyOverflow = body.style.overflow;
+    const prevHtmlOverflow = html.style.overflow;
+    const prevBodyPosition = body.style.position;
+    const prevBodyTop = body.style.top;
+    const prevBodyWidth = body.style.width;
+    body.style.overflow = "hidden";
+    html.style.overflow = "hidden";
+    body.style.position = "fixed";
+    body.style.top = `-${scrollY}px`;
+    body.style.width = "100%";
+    return () => {
+      body.style.overflow = prevBodyOverflow;
+      html.style.overflow = prevHtmlOverflow;
+      body.style.position = prevBodyPosition;
+      body.style.top = prevBodyTop;
+      body.style.width = prevBodyWidth;
+      window.scrollTo(0, scrollY);
+    };
+  }, [locked]);
+}
+
 function money(n) {
   return Number(n || 0).toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
@@ -151,14 +179,70 @@ const NAV = [
 ];
 
 const TABS = [
-  { id: "home", label: "首页", icon: "⌂" },
-  { id: "calendar", label: "日历", icon: "▦" },
-  { id: "add", label: "记一笔", icon: "+", fab: true },
-  { id: "accounts", label: "账户", icon: "▣" },
-  { id: "me", label: "我的", icon: "☺" },
+  { id: "home", label: "首页", icon: "home" },
+  { id: "calendar", label: "日历", icon: "calendar" },
+  { id: "add", label: "记一笔", icon: "plus", fab: true },
+  { id: "accounts", label: "账户", icon: "wallet" },
+  { id: "me", label: "我的", icon: "me" },
 ];
 
 const ME_PAGES = ["me", "more", "budget", "settings", "books", "backup", "ai", "biz", "family"];
+
+function TabIcon({ name }) {
+  const common = {
+    width: 22,
+    height: 22,
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: "1.8",
+    strokeLinecap: "round",
+    strokeLinejoin: "round",
+    "aria-hidden": true,
+  };
+  if (name === "home") {
+    return (
+      <svg {...common}>
+        <path d="M4 11l8-7 8 7" />
+        <path d="M6 10v10h12V10" />
+      </svg>
+    );
+  }
+  if (name === "calendar") {
+    return (
+      <svg {...common}>
+        <rect x="4" y="5" width="16" height="15" rx="3" />
+        <path d="M4 9h16M8 3v4M16 3v4" />
+        <path d="M8.5 13.5l2 2 4-4" />
+      </svg>
+    );
+  }
+  if (name === "wallet") {
+    return (
+      <svg {...common}>
+        <path d="M3 9h18v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V9z" />
+        <path d="M3 9l2.2-3.5A2 2 0 0 1 6.9 4.5h10.2a2 2 0 0 1 1.7.95L21 9" />
+        <circle cx="16.5" cy="14.5" r="1.2" fill="currentColor" stroke="none" />
+      </svg>
+    );
+  }
+  if (name === "me") {
+    return (
+      <svg {...common}>
+        <circle cx="12" cy="8" r="4" />
+        <path d="M4.5 20c1.5-3.5 4.5-5 7.5-5s6 1.5 7.5 5" />
+      </svg>
+    );
+  }
+  if (name === "plus") {
+    return (
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden>
+        <path d="M12 5v14M5 12h14" />
+      </svg>
+    );
+  }
+  return null;
+}
 
 const WEEKDAYS = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"];
 
@@ -168,10 +252,23 @@ export default function App() {
   const [page, setPage] = useState("home");
   const [settingsTab, setSettingsTab] = useState("profile");
   const [toast, setToast] = useState("");
+  const [addOpen, setAddOpen] = useState(false);
 
   function openSettings(tab = "profile") {
     setSettingsTab(tab);
     setPage("settings");
+  }
+
+  function openAdd() {
+    setAddOpen(true);
+  }
+
+  function go(next) {
+    if (next === "add") {
+      openAdd();
+      return;
+    }
+    setPage(next);
   }
 
   function show(msg) {
@@ -228,7 +325,11 @@ export default function App() {
         </button>
         <nav className="nav">
           {NAV.map(([id, label]) => (
-            <button key={id} className={page === id ? "active" : ""} onClick={() => setPage(id)}>
+            <button
+              key={id}
+              className={id === "add" ? (addOpen ? "active" : "") : page === id ? "active" : ""}
+              onClick={() => go(id)}
+            >
               {label}
             </button>
           ))}
@@ -248,10 +349,9 @@ export default function App() {
       </aside>
       <main className="main">
         <div className="page-stack">
-        {page === "home" && <Home token={token} me={me} go={setPage} />}
+        {page === "home" && <Home token={token} me={me} go={go} show={show} />}
         {page === "books" && <Books token={token} me={me} show={show} />}
-        {page === "calendar" && <CalendarPage token={token} me={me} show={show} go={setPage} />}
-        {page === "add" && <Add token={token} show={show} />}
+        {page === "calendar" && <CalendarPage token={token} me={me} show={show} go={go} />}
         {page === "accounts" && <AccountsHome token={token} me={me} show={show} openSettings={openSettings} />}
         {page === "biz" && <Biz token={token} me={me} show={show} />}
         {page === "budget" && <Budget token={token} show={show} />}
@@ -269,7 +369,7 @@ export default function App() {
         {(page === "me" || page === "more") && (
           <MeHub
             me={me}
-            go={setPage}
+            go={go}
             openSettings={openSettings}
             logout={logout}
           />
@@ -278,7 +378,11 @@ export default function App() {
       </main>
       <nav className="tabbar" aria-label="手机导航">
         {TABS.map((tab) => {
-          const on = tab.id === "me" ? ME_PAGES.includes(page) : page === tab.id;
+          const on = tab.fab
+            ? addOpen
+            : tab.id === "me"
+              ? ME_PAGES.includes(page)
+              : page === tab.id;
           return (
             <button
               key={tab.id}
@@ -286,16 +390,23 @@ export default function App() {
               className={`tab ${on ? "on" : ""} ${tab.fab ? "fab" : ""}`}
               aria-current={on ? "page" : undefined}
               aria-label={tab.label}
-              onClick={() => setPage(tab.id)}
+              onClick={() => (tab.fab ? openAdd() : go(tab.id))}
             >
               <span className="tab-icon" aria-hidden="true">
-                {tab.icon}
+                <TabIcon name={tab.icon} />
               </span>
-              <span>{tab.label}</span>
+              <span className="tab-label">{tab.label}</span>
             </button>
           );
         })}
       </nav>
+      {addOpen && (
+        <AddSheet
+          token={token}
+          show={show}
+          onClose={() => setAddOpen(false)}
+        />
+      )}
       {toast && (
         <div className="toast" role="status" aria-live="polite">
           {toast}
@@ -367,7 +478,6 @@ function Login({ onLogin, show, toast }) {
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               disabled={busy}
-              autoFocus
             />
           </label>
 
@@ -388,7 +498,6 @@ function Login({ onLogin, show, toast }) {
                 className="login-eye"
                 onClick={() => setShowPassword((v) => !v)}
                 aria-label={showPassword ? "隐藏密码" : "显示密码"}
-                tabIndex={-1}
               >
                 {showPassword ? "隐藏" : "显示"}
               </button>
@@ -560,6 +669,9 @@ function CalendarPage({ token, me, show, go }) {
   const [yearData, setYearData] = useState(null);
   const [selectedDay, setSelectedDay] = useState(null);
   const [dayRows, setDayRows] = useState([]);
+  const [dayTick, setDayTick] = useState(0);
+  const [editTx, setEditTx] = useState(null);
+  const [txMeta, setTxMeta] = useState({ ledgers: [], accounts: [], cats: [] });
 
   const personQs = personId ? `&owner_user_id=${personId}` : "";
   const visibleMembers = members.filter((m) => me?.user.role === "owner" || m.id === me?.user.id);
@@ -568,6 +680,35 @@ function CalendarPage({ token, me, show, go }) {
   useEffect(() => {
     api("/api/v1/members", { token }).then(setMembers).catch(() => {});
   }, [token]);
+
+  useEffect(() => {
+    Promise.all([
+      api("/api/v1/ledgers", { token }),
+      api("/api/v1/accounts", { token }),
+      api("/api/v1/categories", { token }),
+    ]).then(([l, a, c]) => setTxMeta({ ledgers: l, accounts: a, cats: c }));
+  }, [token]);
+
+  function refreshCalendarLists() {
+    setDayTick((n) => n + 1);
+    if (mode === "month") {
+      api(`/api/v1/calendar/month?year=${year}&month=${month}&scope=${scope}${personQs}`, { token })
+        .then(setMonthData)
+        .catch(() => {});
+    }
+  }
+
+  async function deleteDayTx(t) {
+    if (!window.confirm("确定删除这笔流水？删除后无法恢复。")) return;
+    try {
+      await api(`/api/v1/transactions/${t.id}`, { token, method: "DELETE" });
+      show("流水已删除");
+      setEditTx(null);
+      refreshCalendarLists();
+    } catch (err) {
+      show(err.message);
+    }
+  }
 
   useEffect(() => {
     if (mode !== "month") return;
@@ -620,7 +761,7 @@ function CalendarPage({ token, me, show, go }) {
         }
       })
       .catch((err) => show(err.message));
-  }, [token, year, month, selectedDay, scope, personId, mode]);
+  }, [token, year, month, selectedDay, scope, personId, mode, dayTick]);
 
   function shiftMonth(delta) {
     let y = year;
@@ -783,7 +924,12 @@ function CalendarPage({ token, me, show, go }) {
               </p>
             )}
             {dayRows.map((t) => (
-              <TxRow key={t.id} t={t} />
+              <TxRow
+                key={t.id}
+                t={t}
+                canEdit={canEditTx(me, t)}
+                onEdit={(row) => setEditTx(row)}
+              />
             ))}
           </div>
         </>
@@ -851,19 +997,60 @@ function CalendarPage({ token, me, show, go }) {
           </div>
         </>
       )}
+
+      {editTx && (
+        <TxEditModal
+          tx={editTx}
+          token={token}
+          me={me}
+          ledgers={txMeta.ledgers}
+          accounts={txMeta.accounts}
+          cats={txMeta.cats}
+          show={show}
+          onClose={() => setEditTx(null)}
+          onSaved={() => refreshCalendarLists()}
+          onDelete={deleteDayTx}
+        />
+      )}
     </div>
   );
 }
 
-function Home({ token, me, go }) {
+function Home({ token, me, go, show }) {
   const [dash, setDash] = useState(null);
   const [accounts, setAccounts] = useState([]);
   const [q, setQ] = useState("");
+  const [editTx, setEditTx] = useState(null);
+  const [txMeta, setTxMeta] = useState({ ledgers: [], accounts: [], cats: [] });
 
-  useEffect(() => {
+  function reloadHome() {
     api("/api/v1/dashboard", { token }).then(setDash);
     api("/api/v1/accounts", { token }).then(setAccounts).catch(() => setAccounts([]));
+  }
+
+  useEffect(() => {
+    reloadHome();
   }, [token]);
+
+  useEffect(() => {
+    Promise.all([
+      api("/api/v1/ledgers", { token }),
+      api("/api/v1/accounts", { token }),
+      api("/api/v1/categories", { token }),
+    ]).then(([l, a, c]) => setTxMeta({ ledgers: l, accounts: a, cats: c }));
+  }, [token]);
+
+  async function deleteHomeTx(t) {
+    if (!window.confirm("确定删除这笔流水？删除后无法恢复。")) return;
+    try {
+      await api(`/api/v1/transactions/${t.id}`, { token, method: "DELETE" });
+      show("流水已删除");
+      setEditTx(null);
+      reloadHome();
+    } catch (err) {
+      show(err.message);
+    }
+  }
 
   if (!dash) return <p className="muted">正在打开账本…</p>;
 
@@ -879,26 +1066,6 @@ function Home({ token, me, go }) {
 
   return (
     <div className="home-page">
-      <div className="home-head">
-        <div>
-          <div className="who">
-            {me?.user.display_name}
-            <small>{me?.household?.name}</small>
-          </div>
-          <p className="sub">
-            {dash.period.year} 年 {dash.period.month} 月 · {BRAND_NAME} 家庭账本
-          </p>
-        </div>
-        <div className="home-acts">
-          <button type="button" className="icon-chip" onClick={() => go("budget")} aria-label="预算">
-            ◎
-          </button>
-          <button type="button" className="icon-chip" onClick={() => go("me")} aria-label="我的">
-            ✎
-          </button>
-        </div>
-      </div>
-
       <label className="search-bar">
         <span aria-hidden>⌕</span>
         <input
@@ -1039,7 +1206,12 @@ function Home({ token, me, go }) {
         </div>
         <div className="list" style={{ paddingBottom: 8 }}>
           {recent.map((t) => (
-            <TxRow key={t.id} t={t} />
+            <TxRow
+              key={t.id}
+              t={t}
+              canEdit={canEditTx(me, t)}
+              onEdit={(row) => setEditTx(row)}
+            />
           ))}
           {recent.length === 0 && <div className="empty-state" style={{ margin: 12 }}>暂无匹配账单</div>}
         </div>
@@ -1077,6 +1249,21 @@ function Home({ token, me, go }) {
           </div>
         </div>
       </div>
+
+      {editTx && (
+        <TxEditModal
+          tx={editTx}
+          token={token}
+          me={me}
+          ledgers={txMeta.ledgers}
+          accounts={txMeta.accounts}
+          cats={txMeta.cats}
+          show={show}
+          onClose={() => setEditTx(null)}
+          onSaved={() => reloadHome()}
+          onDelete={deleteHomeTx}
+        />
+      )}
     </div>
   );
 }
@@ -1197,6 +1384,7 @@ function TxEditModal({ tx, token, me, ledgers, accounts, cats, onClose, onSaved,
   const filteredCats = cats.filter(
     (c) => c.kind === form.type && (!ledger || c.ledger_type === ledger.type)
   );
+  useBodyScrollLock(true);
 
   useEffect(() => {
     setForm(txFormFromRow(tx));
@@ -1458,7 +1646,7 @@ function Books({ token, me, show }) {
   );
 }
 
-function Add({ token, show }) {
+function AddSheet({ token, show, onClose }) {
   const [ledgers, setLedgers] = useState([]);
   const [accounts, setAccounts] = useState([]);
   const [cats, setCats] = useState([]);
@@ -1470,6 +1658,8 @@ function Add({ token, show }) {
     account_id: "",
     category_id: "",
   });
+  useBodyScrollLock(true);
+
   useEffect(() => {
     Promise.all([
       api("/api/v1/ledgers", { token }),
@@ -1486,10 +1676,12 @@ function Add({ token, show }) {
       }));
     });
   }, [token]);
+
   const ledger = ledgers.find((l) => String(l.id) === String(form.ledger_id));
   const filteredCats = cats.filter(
     (c) => c.kind === form.type && (!ledger || c.ledger_type === ledger.type)
   );
+
   async function submit(e) {
     e.preventDefault();
     try {
@@ -1505,89 +1697,112 @@ function Add({ token, show }) {
         },
       });
       show("窝窝记下了 ✓");
-      setForm((f) => ({ ...f, amount: "", note: "" }));
+      onClose();
     } catch (err) {
       show(err.message);
     }
   }
+
   return (
-    <div className="add-page">
-      <div className="page-head">
-        <div>
-          <h2 className="hello">记一笔</h2>
-          <p className="sub">选类型、金额与账本，轻轻记下。</p>
+    <div className="modal-backdrop add-sheet-backdrop" onClick={onClose}>
+      <form
+        className="card modal add-sheet"
+        onSubmit={submit}
+        onClick={(e) => e.stopPropagation()}
+        aria-labelledby="add-sheet-title"
+      >
+        <div className="add-sheet-head">
+          <div>
+            <h2 id="add-sheet-title" className="add-sheet-title">
+              记一笔
+            </h2>
+            <p className="add-sheet-sub">选类型、金额与账本</p>
+          </div>
+          <button type="button" className="text-link add-sheet-cancel" onClick={onClose}>
+            取消
+          </button>
         </div>
-      </div>
-      <form className="card form-grid add-form" onSubmit={submit}>
-        <div style={{ gridColumn: "1 / -1" }}>
-          <Segmented
-            value={form.type}
-            options={[
-              ["expense", "支出"],
-              ["income", "收入"],
-            ]}
-            onChange={(type) => setForm({ ...form, type, category_id: "" })}
-          />
+
+        <div className="add-sheet-body">
+          <div className="form-grid add-form">
+            <div style={{ gridColumn: "1 / -1" }}>
+              <Segmented
+                value={form.type}
+                options={[
+                  ["expense", "支出"],
+                  ["income", "收入"],
+                ]}
+                onChange={(type) => setForm({ ...form, type, category_id: "" })}
+              />
+            </div>
+            <label className="amount-field" style={{ gridColumn: "1 / -1" }}>
+              金额
+              <input
+                type="text"
+                inputMode="decimal"
+                pattern="[0-9]*[.]?[0-9]*"
+                value={form.amount}
+                onChange={(e) => setForm({ ...form, amount: e.target.value.replace(/[^\d.]/g, "") })}
+                placeholder="0.00"
+                required
+              />
+            </label>
+            <div className="field-block" style={{ gridColumn: "1 / -1" }}>
+              <span className="cat-label">账本</span>
+              <div className="chip-wrap">
+                {ledgers.map((l) => (
+                  <FilterChip
+                    key={l.id}
+                    active={String(form.ledger_id) === String(l.id)}
+                    onClick={() => setForm({ ...form, ledger_id: l.id, category_id: "" })}
+                    className="ledger-filter"
+                  >
+                    <LedgerThumb ledger={l} size={20} />
+                    {l.name}
+                  </FilterChip>
+                ))}
+              </div>
+            </div>
+            <label style={{ gridColumn: "1 / -1" }}>
+              账户
+              <select value={form.account_id} onChange={(e) => setForm({ ...form, account_id: e.target.value })}>
+                {accounts.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.name} · {accountKindLabel(a.kind)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <div className="cat-block" style={{ gridColumn: "1 / -1" }}>
+              <span className="cat-label">分类</span>
+              <div className="chip-wrap">
+                {filteredCats.map((c) => (
+                  <FilterChip
+                    key={c.id}
+                    active={String(form.category_id || filteredCats[0]?.id) === String(c.id)}
+                    onClick={() => setForm({ ...form, category_id: c.id })}
+                  >
+                    {c.icon} {c.name}
+                  </FilterChip>
+                ))}
+              </div>
+            </div>
+            <label style={{ gridColumn: "1 / -1" }}>
+              备注
+              <input
+                value={form.note}
+                onChange={(e) => setForm({ ...form, note: e.target.value })}
+                placeholder="午饭 / 客户尾款 / 水电…"
+              />
+            </label>
+          </div>
         </div>
-        <label className="amount-field" style={{ gridColumn: "1 / -1" }}>
-          金额
-          <input
-            type="text"
-            inputMode="decimal"
-            pattern="[0-9]*[.]?[0-9]*"
-            value={form.amount}
-            onChange={(e) => setForm({ ...form, amount: e.target.value.replace(/[^\d.]/g, "") })}
-            placeholder="0.00"
-            required
-          />
-        </label>
-        <label style={{ gridColumn: "1 / -1" }}>
-          账本
-          <FilterBar>
-            {ledgers.map((l) => (
-              <FilterChip
-                key={l.id}
-                active={String(form.ledger_id) === String(l.id)}
-                onClick={() => setForm({ ...form, ledger_id: l.id, category_id: "" })}
-                className="ledger-filter"
-              >
-                <LedgerThumb ledger={l} size={22} />
-                {l.name}
-              </FilterChip>
-            ))}
-          </FilterBar>
-        </label>
-        <label style={{ gridColumn: "1 / -1" }}>
-          账户
-          <select value={form.account_id} onChange={(e) => setForm({ ...form, account_id: e.target.value })}>
-            {accounts.map((a) => (
-              <option key={a.id} value={a.id}>
-                {a.name} · {accountKindLabel(a.kind)}
-              </option>
-            ))}
-          </select>
-        </label>
-        <div className="cat-block" style={{ gridColumn: "1 / -1" }}>
-          <span className="cat-label">分类</span>
-          <FilterBar>
-            {filteredCats.map((c) => (
-              <FilterChip
-                key={c.id}
-                active={String(form.category_id || filteredCats[0]?.id) === String(c.id)}
-                onClick={() => setForm({ ...form, category_id: c.id })}
-              >
-                {c.icon} {c.name}
-              </FilterChip>
-            ))}
-          </FilterBar>
+
+        <div className="add-sheet-foot">
+          <button className="btn add-submit" type="submit">
+            保存这笔
+          </button>
         </div>
-        <label style={{ gridColumn: "1 / -1" }}>
-          备注
-          <input value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} placeholder="午饭 / 客户尾款 / 水电…" />
-        </label>
-        <button className="btn add-submit" style={{ gridColumn: "1 / -1" }}>
-          保存
-        </button>
       </form>
     </div>
   );

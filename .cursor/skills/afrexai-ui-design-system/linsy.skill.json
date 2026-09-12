@@ -1,0 +1,15 @@
+{
+  "name": "UI Design System Builder",
+  "actions": [],
+  "secrets": [],
+  "version": "1.0.0",
+  "skill_id": "afrexai-ui-design-system",
+  "description": "Build a complete design system: starting from a design brief and user research, produce a design token set (colour, type, spacing, radius, shadow), component library conventions, responsive breakpoint strategy, and state-handling rules, emitted as CSS variables or Tailwind configuration. Includes a design-type decision matrix giving layout pattern and information density per product type. Use this skill whenever the request mentions a design system, design tokens, style conventions, a component library, or unifying visual style.",
+  "permissions": [],
+  "runtime_type": "prompt_only",
+  "compatibility": {
+    "legacy_secret_env": false,
+    "min_linsywork_version": "0.3.0"
+  },
+  "schema_version": "1.0"
+}

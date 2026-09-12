@@ -1,0 +1,15 @@
+{
+  "name": "Frontend Design Refinement",
+  "actions": [],
+  "secrets": [],
+  "version": "1.0.0",
+  "skill_id": "frontend-design-pro",
+  "description": "Lift AI-generated interfaces out of a templated look: review and refine against a design language specification, correcting item by item from an anti-pattern list (Inter with purple gradients, nested cards, grey text on coloured fills, bouncy easing). Offers directed adjustment commands including audit, polish, critique, colorize, animate, bolder, quieter, and distill. Use this skill whenever the request asks to refine an interface, polish visuals, fix a templated look, or adjust colour and motion style.",
+  "permissions": [],
+  "runtime_type": "prompt_only",
+  "compatibility": {
+    "legacy_secret_env": false,
+    "min_linsywork_version": "0.3.0"
+  },
+  "schema_version": "1.0"
+}

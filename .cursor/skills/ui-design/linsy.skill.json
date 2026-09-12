@@ -1,0 +1,15 @@
+{
+  "name": "UI Design Review",
+  "actions": [],
+  "secrets": [],
+  "version": "1.0.0",
+  "skill_id": "ui-design",
+  "description": "Review interface design quality and return fixes: layout and visual hierarchy, type system (scale, line height, alignment), colour pairing and contrast, spacing consistency, restraint in motion, and WCAG accessibility conformance, flagging common UI anti-patterns. Also usable as a design-principle reference when building new interfaces. Use this skill whenever the request asks for a review, a critique of what is wrong, an accessibility check, or says an interface looks unprofessional.",
+  "permissions": [],
+  "runtime_type": "prompt_only",
+  "compatibility": {
+    "legacy_secret_env": false,
+    "min_linsywork_version": "0.3.0"
+  },
+  "schema_version": "1.0"
+}
