@@ -976,7 +976,10 @@ def dashboard(
     hid = user.household_id
     start, end = month_range(year, month)
     all_ledgers = db.query(Ledger).filter(Ledger.household_id == hid).all()
-    family_ids = [l.id for l in all_ledgers if l.include_in_family]
+    # 经营账永远不进家庭总额；仅 include_in_family 且非 business 的账本计入生活统计
+    family_ids = [
+        l.id for l in all_ledgers if l.include_in_family and l.type != "business"
+    ]
     biz_ids = [l.id for l in all_ledgers if l.type == "business"]
     personal_mine = [l.id for l in all_ledgers if l.type == "personal" and l.owner_user_id == user.id]
 
@@ -1064,16 +1067,33 @@ def dashboard(
             }
         )
 
+    # 首页「最近入账」只展示生活账，避免经营流水混进家庭总览
     recent = (
         db.query(Transaction)
-        .filter(Transaction.household_id == hid, Transaction.ledger_id.in_(family_ids + biz_ids or [0]))
+        .filter(Transaction.household_id == hid, Transaction.ledger_id.in_(family_ids or [0]))
         .order_by(Transaction.occurred_at.desc())
         .limit(8)
+        .all()
+    )
+    recent_biz = (
+        db.query(Transaction)
+        .filter(Transaction.household_id == hid, Transaction.ledger_id.in_(biz_ids or [0]))
+        .order_by(Transaction.occurred_at.desc())
+        .limit(5)
         .all()
     )
     if user.role != "owner":
         vis = [l.id for l in all_ledgers if can_see_ledger(user, l)]
         recent = [t for t in recent if t.ledger_id in vis]
+        recent_biz = [t for t in recent_biz if t.ledger_id in vis]
+
+    accounts = db.query(Account).filter(Account.household_id == hid).all()
+    life_opening = round(
+        sum(float(a.opening_balance) for a in accounts if a.kind != "business"), 2
+    )
+    biz_opening = round(
+        sum(float(a.opening_balance) for a in accounts if a.kind == "business"), 2
+    )
 
     return {
         "period": {"year": year, "month": month},
@@ -1081,18 +1101,21 @@ def dashboard(
             "income": family_income,
             "expense": family_expense,
             "balance": family_income - family_expense,
+            "opening_balance": life_opening,
         },
         "me": {"income": my_income, "expense": my_expense, "balance": my_income - my_expense},
         "business": {
             "income": biz_income,
             "expense": biz_expense,
             "profit": biz_income - biz_expense,
+            "opening_balance": biz_opening,
         },
         "members": member_stats,
         "by_category": by_category,
         "trend": trend,
         "budgets": budget_out,
         "recent": [tx_out(t, db) for t in recent],
+        "recent_business": [tx_out(t, db) for t in recent_biz],
     }
 
 

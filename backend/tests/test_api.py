@@ -25,6 +25,17 @@ def test_login_and_family_dashboard():
         body = dash.json()
         assert body["family"]["income"] > 0
         assert "profit" in body["business"]
+        # 经营收支单独统计，不得混入家庭总览数字
+        assert body["business"]["income"] > 0
+        assert body["business"]["expense"] >= 0
+        assert abs(body["family"]["balance"] - (body["family"]["income"] - body["family"]["expense"])) < 0.01
+        assert "opening_balance" in body["family"]
+        assert "opening_balance" in body["business"]
+        assert "recent_business" in body
+        for tx in body["recent"]:
+            assert tx["ledger_type"] != "business"
+        for tx in body["recent_business"]:
+            assert tx["ledger_type"] == "business"
         ingest = client.post(
             "/api/v1/ai/ingest",
             headers={"Authorization": f"Bearer {token}"},

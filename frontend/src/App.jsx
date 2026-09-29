@@ -375,9 +375,9 @@ function More({ go, logout, me }) {
 
 const CAL_WEEKDAYS = ["一", "二", "三", "四", "五", "六", "日"];
 const CAL_SCOPES = [
-  ["all", "全部"],
   ["family", "生活账"],
   ["business", "经营账"],
+  ["all", "对照全部"],
 ];
 
 function pad2(n) {
@@ -399,7 +399,7 @@ function CalendarPage({ token, me, show, go }) {
   const [mode, setMode] = useState("month"); // month | year
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth() + 1);
-  const [scope, setScope] = useState("all");
+  const [scope, setScope] = useState("family");
   const [personId, setPersonId] = useState("");
   const [members, setMembers] = useState([]);
   const [monthData, setMonthData] = useState(null);
@@ -507,7 +507,11 @@ function CalendarPage({ token, me, show, go }) {
           <p className="sub">
             {selectedPerson
               ? `正在看 ${selectedPerson.display_name} 的个人账本`
-              : "点一天看明细；可选某位家人，只看 TA 的账本。"}
+              : scope === "business"
+                ? "当前只统计经营账，不计入生活总额。"
+                : scope === "all"
+                  ? "对照模式：生活账与经营账会加总显示。"
+                  : "默认只看生活账；经营账请切到「经营账」单独查看。"}
           </p>
         </div>
         <button className="btn desktop-only" type="button" onClick={() => go("add")}>
@@ -575,15 +579,21 @@ function CalendarPage({ token, me, show, go }) {
           {monthData && (
             <div className="row three cal-summary">
               <div className="card sage">
-                <div className="label">本月收入</div>
+                <div className="label">
+                  {scope === "business" ? "经营收入" : scope === "all" ? "合计收入" : "生活收入"}
+                </div>
                 <div className="num">¥ {money(monthData.summary.income)}</div>
               </div>
               <div className="card coral">
-                <div className="label">本月支出</div>
+                <div className="label">
+                  {scope === "business" ? "经营支出" : scope === "all" ? "合计支出" : "生活支出"}
+                </div>
                 <div className="num">¥ {money(monthData.summary.expense)}</div>
               </div>
               <div className="card butter">
-                <div className="label">本月结余</div>
+                <div className="label">
+                  {scope === "business" ? "经营结余" : scope === "all" ? "合计结余" : "生活结余"}
+                </div>
                 <div className="num">¥ {money(monthData.summary.balance)}</div>
               </div>
             </div>
@@ -659,15 +669,21 @@ function CalendarPage({ token, me, show, go }) {
           {yearData && (
             <div className="row three cal-summary">
               <div className="card sage">
-                <div className="label">全年收入</div>
+                <div className="label">
+                  {scope === "business" ? "全年经营收入" : scope === "all" ? "全年合计收入" : "全年生活收入"}
+                </div>
                 <div className="num">¥ {money(yearData.summary.income)}</div>
               </div>
               <div className="card coral">
-                <div className="label">全年支出</div>
+                <div className="label">
+                  {scope === "business" ? "全年经营支出" : scope === "all" ? "全年合计支出" : "全年生活支出"}
+                </div>
                 <div className="num">¥ {money(yearData.summary.expense)}</div>
               </div>
               <div className="card butter">
-                <div className="label">全年结余</div>
+                <div className="label">
+                  {scope === "business" ? "全年经营结余" : scope === "all" ? "全年合计结余" : "全年生活结余"}
+                </div>
                 <div className="num">¥ {money(yearData.summary.balance)}</div>
               </div>
             </div>
@@ -725,35 +741,65 @@ function Home({ token, me, go }) {
             <span className="hello-short">你好，{me?.user.display_name}</span>
           </h2>
           <p className="sub">
-            {dash.period.year} 年 {dash.period.month} 月 · 生活账与经营账已分开
+            {dash.period.year} 年 {dash.period.month} 月 · 家庭生活账与经营账分开统计
           </p>
         </div>
         <button className="btn desktop-only" onClick={() => go("add")}>
           记一笔
         </button>
       </div>
-      <div className="row stats">
-        <div className="card coral">
-          <div className="label">家庭支出</div>
-          <div className="num">¥ {money(dash.family.expense)}</div>
+
+      <section className="stat-block">
+        <div className="stat-block-head">
+          <h3>家庭生活账</h3>
+          <p className="muted">不含经营副业流水</p>
         </div>
-        <div className="card sage">
-          <div className="label">家庭收入</div>
-          <div className="num">¥ {money(dash.family.income)}</div>
+        <div className="row stats stats-three">
+          <div className="card coral">
+            <div className="label">本月支出</div>
+            <div className="num">¥ {money(dash.family.expense)}</div>
+          </div>
+          <div className="card sage">
+            <div className="label">本月收入</div>
+            <div className="num">¥ {money(dash.family.income)}</div>
+          </div>
+          <div className="card butter">
+            <div className="label">本月结余</div>
+            <div className="num">¥ {money(dash.family.balance)}</div>
+          </div>
         </div>
-        <div className="card butter">
-          <div className="label">家庭结余</div>
-          <div className="num">¥ {money(dash.family.balance)}</div>
+      </section>
+
+      <section className="stat-block">
+        <div className="stat-block-head">
+          <h3>经营账本</h3>
+          <button type="button" className="btn ghost btn-sm" onClick={() => go("biz")}>
+            单独查看
+          </button>
         </div>
-        <div className="card">
-          <div className="label">副业本月毛利</div>
-          <div className="num">¥ {money(dash.business.profit)}</div>
-          <p className="muted">不计入日常消费结构</p>
+        <div className="row stats stats-three">
+          <div className="card sage">
+            <div className="label">经营收入</div>
+            <div className="num">¥ {money(dash.business.income)}</div>
+          </div>
+          <div className="card coral">
+            <div className="label">经营成本</div>
+            <div className="num">¥ {money(dash.business.expense)}</div>
+          </div>
+          <div className="card">
+            <div className="label">本月毛利</div>
+            <div className="num">¥ {money(dash.business.profit)}</div>
+            <p className="muted">不计入家庭消费结构</p>
+          </div>
         </div>
-      </div>
+      </section>
+
       <div className="row two">
         <div className="card">
           <h3>近半年家庭收支</h3>
+          <p className="muted" style={{ marginTop: 0 }}>
+            仅生活账趋势
+          </p>
           <div className="chart-box">
             <ResponsiveContainer>
               <AreaChart data={dash.trend}>
@@ -769,6 +815,9 @@ function Home({ token, me, go }) {
         </div>
         <div className="card">
           <h3>家庭支出构成</h3>
+          <p className="muted" style={{ marginTop: 0 }}>
+            经营成本不进饼图
+          </p>
           <div className="chart-box">
             <ResponsiveContainer>
               <PieChart>
@@ -813,7 +862,7 @@ function Home({ token, me, go }) {
               </div>
             </div>
           ))}
-          <h3>最近入账</h3>
+          <h3>最近生活入账</h3>
           <div className="list">
             {dash.recent.map((t) => (
               <TxRow key={t.id} t={t} />
@@ -1271,7 +1320,7 @@ function Biz({ token, me, show }) {
   return (
     <>
       <h2 className="hello">经营账本 · 副业小摊</h2>
-      <p className="sub">进账、进货、订阅费都在这里。点击流水可编辑或删除。</p>
+      <p className="sub">进账、进货、订阅费单独统计，不计入家庭生活总额。点击流水可编辑或删除。</p>
       <div className="row three" style={{ marginTop: 16 }}>
         <div className="card sage">
           <div className="label">经营收入</div>
@@ -1286,6 +1335,16 @@ function Biz({ token, me, show }) {
           <div className="num">¥ {money(dash.business.profit)}</div>
         </div>
       </div>
+      {(dash.recent_business || []).length > 0 && (
+        <div className="card" style={{ marginTop: 16 }}>
+          <h3>最近经营入账</h3>
+          <div className="list">
+            {dash.recent_business.map((t) => (
+              <TxRow key={t.id} t={t} />
+            ))}
+          </div>
+        </div>
+      )}
       <div className="card" style={{ marginTop: 16 }}>
         <TransactionList
           token={token}
@@ -1988,6 +2047,31 @@ function SettingsPanel({ token, me, show, onMeUpdate, initialTab = "profile" }) 
 
       {tab === "wallets" && (
         <>
+          <div className="row stats stats-two" style={{ marginBottom: 16 }}>
+            <div className="card sage">
+              <div className="label">生活账户期初合计</div>
+              <div className="num">
+                ¥{" "}
+                {money(
+                  wallets
+                    .filter((w) => w.kind !== "business")
+                    .reduce((s, w) => s + Number(w.opening_balance || 0), 0)
+                )}
+              </div>
+            </div>
+            <div className="card">
+              <div className="label">经营账户期初合计</div>
+              <div className="num">
+                ¥{" "}
+                {money(
+                  wallets
+                    .filter((w) => w.kind === "business")
+                    .reduce((s, w) => s + Number(w.opening_balance || 0), 0)
+                )}
+              </div>
+              <p className="muted">与家庭生活账户分开统计</p>
+            </div>
+          </div>
           <div className="card">
             {wallets.map((w) => (
               <div className="member-row" key={w.id}>
@@ -1995,6 +2079,7 @@ function SettingsPanel({ token, me, show, onMeUpdate, initialTab = "profile" }) 
                   <strong>{w.name}</strong>
                   <div className="muted">
                     {accountKindLabel(w.kind)} · 期初 ¥ {money(w.opening_balance)}
+                    {w.kind === "business" ? " · 经营" : " · 生活"}
                   </div>
                 </div>
                 <div className="member-actions">

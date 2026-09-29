@@ -231,6 +231,31 @@ button {
   grid-template-columns: repeat(4, 1fr);
 }
 
+.stats-three {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.stats-two {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.stat-block {
+  margin-bottom: 18px;
+}
+
+.stat-block-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.stat-block-head h3 {
+  margin: 0;
+  font-size: 17px;
+}
+
 .card {
   background: var(--paper);
   border-radius: var(--radius);
@@ -1195,6 +1220,18 @@ textarea {
 
   .stats {
     grid-template-columns: 1fr 1fr;
+  }
+
+  .stats-three {
+    grid-template-columns: 1fr;
+  }
+
+  .stats-two {
+    grid-template-columns: 1fr;
+  }
+
+  .stat-block-head {
+    align-items: center;
   }
 
   .cal-summary.three {
