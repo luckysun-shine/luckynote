@@ -1,0 +1,15 @@
+{
+  "name": "Wireframe and User Flow",
+  "actions": [],
+  "secrets": [],
+  "version": "1.0.0",
+  "skill_id": "wireframe",
+  "description": "Produce low-fidelity wireframes and user flow diagrams: page-level wireframes, component sketches, navigation relationships, and flowcharts, in ASCII or SVG, exportable to HTML for team review. Used while structure is still unsettled, to settle information architecture and functional blocks before visual design begins. Requires a shell-capable environment. Use this skill whenever the request mentions wireframes, low fidelity, page structure, user flows, or navigation relationships. Requires a shell-capable environment.",
+  "permissions": [],
+  "runtime_type": "prompt_only",
+  "compatibility": {
+    "legacy_secret_env": false,
+    "min_linsywork_version": "0.3.0"
+  },
+  "schema_version": "1.0"
+}

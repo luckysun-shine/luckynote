@@ -25,6 +25,17 @@ def test_login_and_family_dashboard():
         body = dash.json()
         assert body["family"]["income"] > 0
         assert "profit" in body["business"]
+        # 经营收支单独统计，不得混入家庭总览数字
+        assert body["business"]["income"] > 0
+        assert body["business"]["expense"] >= 0
+        assert abs(body["family"]["balance"] - (body["family"]["income"] - body["family"]["expense"])) < 0.01
+        assert "opening_balance" in body["family"]
+        assert "opening_balance" in body["business"]
+        assert "recent_business" in body
+        for tx in body["recent"]:
+            assert tx["ledger_type"] != "business"
+        for tx in body["recent_business"]:
+            assert tx["ledger_type"] == "business"
         ingest = client.post(
             "/api/v1/ai/ingest",
             headers={"Authorization": f"Bearer {token}"},
@@ -159,9 +170,10 @@ def test_transaction_patch_and_delete():
         token = res.json()["token"]
         headers = {"Authorization": f"Bearer {token}"}
 
-        txs = client.get("/api/v1/transactions?limit=1", headers=headers)
+        txs = client.get("/api/v1/transactions?limit=50", headers=headers)
         assert txs.status_code == 200
-        tx = txs.json()[0]
+        me = client.get("/api/v1/me", headers=headers).json()["user"]
+        tx = next(t for t in txs.json() if t["user_id"] == me["id"])
         tx_id = tx["id"]
 
         patched = client.patch(
@@ -207,3 +219,53 @@ def test_transaction_patch_and_delete():
             json={"note": "越权"},
         )
         assert forbidden.status_code == 403
+
+
+def test_calendar_month_and_year():
+    with TestClient(app) as client:
+        res = client.post("/api/v1/auth/login", json={"username": "lin", "password": "luckynote"})
+        if res.status_code != 200:
+            res = client.post("/api/v1/auth/login", json={"username": "lin", "password": "luckynote2"})
+        headers = {"Authorization": f"Bearer {res.json()['token']}"}
+        now = __import__("datetime").datetime.now()
+        month = client.get(
+            f"/api/v1/calendar/month?year={now.year}&month={now.month}",
+            headers=headers,
+        )
+        assert month.status_code == 200
+        body = month.json()
+        assert body["year"] == now.year
+        assert body["month"] == now.month
+        assert "summary" in body and "days" in body
+        assert body["summary"]["expense"] >= 0
+
+        year = client.get(f"/api/v1/calendar/year?year={now.year}", headers=headers)
+        assert year.status_code == 200
+        ybody = year.json()
+        assert len(ybody["months"]) == 12
+        assert ybody["summary"]["income"] >= 0
+
+        day = client.get(
+            f"/api/v1/transactions?year={now.year}&month={now.month}&day=1&limit=50",
+            headers=headers,
+        )
+        assert day.status_code == 200
+        assert isinstance(day.json(), list)
+
+        me = client.get("/api/v1/me", headers=headers).json()["user"]
+        by_person = client.get(
+            f"/api/v1/calendar/month?year={now.year}&month={now.month}&owner_user_id={me['id']}",
+            headers=headers,
+        )
+        assert by_person.status_code == 200
+        pbody = by_person.json()
+        assert pbody["person"]["id"] == me["id"]
+        assert pbody["summary"]["expense"] >= 0
+
+        yuan = client.post("/api/v1/auth/login", json={"username": "yuan", "password": "luckynote"})
+        yuan_headers = {"Authorization": f"Bearer {yuan.json()['token']}"}
+        peek = client.get(
+            f"/api/v1/calendar/month?year={now.year}&month={now.month}&owner_user_id={me['id']}",
+            headers=yuan_headers,
+        )
+        assert peek.status_code == 403

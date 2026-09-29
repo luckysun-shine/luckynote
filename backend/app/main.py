@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import secrets
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Annotated, Optional
 
 from fastapi import Depends, FastAPI, File, Header, HTTPException, UploadFile
@@ -706,13 +706,19 @@ def list_tx(
     user_id: Optional[int] = None,
     year: Optional[int] = None,
     month: Optional[int] = None,
+    day: Optional[int] = None,
+    owner_user_id: Optional[int] = None,
     tx_type: Optional[str] = None,
     limit: int = 200,
     user: User = Depends(current_user),
     db: Session = Depends(get_db),
 ):
     q = db.query(Transaction).filter(Transaction.household_id == user.household_id)
-    if year and month:
+    if year and month and day:
+        start = datetime(year, month, day)
+        end = start + timedelta(days=1)
+        q = q.filter(Transaction.occurred_at >= start, Transaction.occurred_at < end)
+    elif year and month:
         start, end = month_range(year, month)
         q = q.filter(Transaction.occurred_at >= start, Transaction.occurred_at < end)
     if ledger_id:
@@ -729,6 +735,9 @@ def list_tx(
         if user.role != "owner" and user_id != user.id:
             raise HTTPException(403, "只能查看自己的个人明细")
         q = q.filter(Transaction.user_id == user_id)
+    if owner_user_id is not None:
+        lids = _visible_ledger_ids(db, user, "all", owner_user_id)
+        q = q.filter(Transaction.ledger_id.in_(lids or [0]))
     if tx_type:
         q = q.filter(Transaction.type == tx_type)
     if user.role != "owner":
@@ -802,6 +811,141 @@ def delete_tx(tx_id: int, user: User = Depends(current_user), db: Session = Depe
     return {"ok": True}
 
 
+def _visible_ledger_ids(
+    db: Session, user: User, scope: str = "all", owner_user_id: int | None = None
+) -> list[int]:
+    rows = db.query(Ledger).filter(Ledger.household_id == user.household_id).all()
+    visible = [l for l in rows if can_see_ledger(user, l)]
+    if owner_user_id is not None:
+        target = db.get(User, owner_user_id)
+        if not target or target.household_id != user.household_id:
+            raise HTTPException(404, "成员不存在")
+        if user.role != "owner" and owner_user_id != user.id:
+            raise HTTPException(403, "只能查看自己的个人账本")
+        visible = [l for l in visible if l.owner_user_id == owner_user_id]
+    if scope == "family":
+        return [l.id for l in visible if l.type != "business"]
+    if scope == "business":
+        return [l.id for l in visible if l.type == "business"]
+    return [l.id for l in visible]
+
+
+def _calendar_person(db: Session, owner_user_id: int | None) -> dict | None:
+    if not owner_user_id:
+        return None
+    who = db.get(User, owner_user_id)
+    if not who:
+        return None
+    return {"id": who.id, "display_name": who.display_name, "avatar_color": who.avatar_color}
+
+
+@app.get("/api/v1/calendar/month")
+def calendar_month(
+    year: Optional[int] = None,
+    month: Optional[int] = None,
+    scope: str = "all",
+    owner_user_id: Optional[int] = None,
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    """按日汇总：每月格子里看收入/支出/结余。"""
+    now = datetime.now()
+    year = year or now.year
+    month = month or now.month
+    if month < 1 or month > 12:
+        raise HTTPException(400, "月份无效")
+    start, end = month_range(year, month)
+    lids = _visible_ledger_ids(db, user, scope, owner_user_id)
+    days_map: dict[str, dict] = {}
+    if lids:
+        rows = (
+            db.query(Transaction)
+            .filter(
+                Transaction.household_id == user.household_id,
+                Transaction.ledger_id.in_(lids),
+                Transaction.occurred_at >= start,
+                Transaction.occurred_at < end,
+            )
+            .all()
+        )
+        for tx in rows:
+            key = tx.occurred_at.strftime("%Y-%m-%d")
+            cell = days_map.setdefault(
+                key, {"date": key, "income": 0.0, "expense": 0.0, "count": 0}
+            )
+            cell["count"] += 1
+            if tx.type == "income":
+                cell["income"] += float(tx.amount)
+            else:
+                cell["expense"] += float(tx.amount)
+    days = []
+    for key in sorted(days_map):
+        cell = days_map[key]
+        cell["income"] = round(cell["income"], 2)
+        cell["expense"] = round(cell["expense"], 2)
+        cell["balance"] = round(cell["income"] - cell["expense"], 2)
+        days.append(cell)
+    income = round(sum(d["income"] for d in days), 2)
+    expense = round(sum(d["expense"] for d in days), 2)
+    return {
+        "year": year,
+        "month": month,
+        "scope": scope,
+        "person": _calendar_person(db, owner_user_id),
+        "summary": {
+            "income": income,
+            "expense": expense,
+            "balance": round(income - expense, 2),
+            "days_with_tx": len(days),
+            "tx_count": sum(d["count"] for d in days),
+        },
+        "days": days,
+    }
+
+
+@app.get("/api/v1/calendar/year")
+def calendar_year(
+    year: Optional[int] = None,
+    scope: str = "all",
+    owner_user_id: Optional[int] = None,
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    """按月汇总：一年里各月收支一眼看完。"""
+    now = datetime.now()
+    year = year or now.year
+    lids = _visible_ledger_ids(db, user, scope, owner_user_id)
+    months = []
+    year_income = 0.0
+    year_expense = 0.0
+    for m in range(1, 13):
+        s, e = month_range(year, m)
+        income = _sum(db, user.household_id, lids, s, e, "income")
+        expense = _sum(db, user.household_id, lids, s, e, "expense")
+        year_income += income
+        year_expense += expense
+        months.append(
+            {
+                "year": year,
+                "month": m,
+                "income": round(income, 2),
+                "expense": round(expense, 2),
+                "balance": round(income - expense, 2),
+            }
+        )
+    return {
+        "year": year,
+        "scope": scope,
+        "person": _calendar_person(db, owner_user_id),
+        "summary": {
+            "income": round(year_income, 2),
+            "expense": round(year_expense, 2),
+            "balance": round(year_income - year_expense, 2),
+        },
+        "months": months,
+    }
+
+
 def _sum(db: Session, hid: int, ledger_ids: list[int], start: datetime, end: datetime, tx_type: str):
     if not ledger_ids:
         return 0.0
@@ -832,7 +976,10 @@ def dashboard(
     hid = user.household_id
     start, end = month_range(year, month)
     all_ledgers = db.query(Ledger).filter(Ledger.household_id == hid).all()
-    family_ids = [l.id for l in all_ledgers if l.include_in_family]
+    # 经营账永远不进家庭总额；仅 include_in_family 且非 business 的账本计入生活统计
+    family_ids = [
+        l.id for l in all_ledgers if l.include_in_family and l.type != "business"
+    ]
     biz_ids = [l.id for l in all_ledgers if l.type == "business"]
     personal_mine = [l.id for l in all_ledgers if l.type == "personal" and l.owner_user_id == user.id]
 
@@ -920,16 +1067,33 @@ def dashboard(
             }
         )
 
+    # 首页「最近入账」只展示生活账，避免经营流水混进家庭总览
     recent = (
         db.query(Transaction)
-        .filter(Transaction.household_id == hid, Transaction.ledger_id.in_(family_ids + biz_ids or [0]))
+        .filter(Transaction.household_id == hid, Transaction.ledger_id.in_(family_ids or [0]))
         .order_by(Transaction.occurred_at.desc())
         .limit(8)
+        .all()
+    )
+    recent_biz = (
+        db.query(Transaction)
+        .filter(Transaction.household_id == hid, Transaction.ledger_id.in_(biz_ids or [0]))
+        .order_by(Transaction.occurred_at.desc())
+        .limit(5)
         .all()
     )
     if user.role != "owner":
         vis = [l.id for l in all_ledgers if can_see_ledger(user, l)]
         recent = [t for t in recent if t.ledger_id in vis]
+        recent_biz = [t for t in recent_biz if t.ledger_id in vis]
+
+    accounts = db.query(Account).filter(Account.household_id == hid).all()
+    life_opening = round(
+        sum(float(a.opening_balance) for a in accounts if a.kind != "business"), 2
+    )
+    biz_opening = round(
+        sum(float(a.opening_balance) for a in accounts if a.kind == "business"), 2
+    )
 
     return {
         "period": {"year": year, "month": month},
@@ -937,18 +1101,21 @@ def dashboard(
             "income": family_income,
             "expense": family_expense,
             "balance": family_income - family_expense,
+            "opening_balance": life_opening,
         },
         "me": {"income": my_income, "expense": my_expense, "balance": my_income - my_expense},
         "business": {
             "income": biz_income,
             "expense": biz_expense,
             "profit": biz_income - biz_expense,
+            "opening_balance": biz_opening,
         },
         "members": member_stats,
         "by_category": by_category,
         "trend": trend,
         "budgets": budget_out,
         "recent": [tx_out(t, db) for t in recent],
+        "recent_business": [tx_out(t, db) for t in recent_biz],
     }
 
 

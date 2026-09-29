@@ -1,0 +1,15 @@
+{
+  "name": "PRD to Prototype",
+  "actions": [],
+  "secrets": [],
+  "version": "1.0.0",
+  "skill_id": "prd-to-prototype",
+  "description": "Turn a one-line product idea into a PRD and a high-fidelity interactive prototype through a forced two-step flow: PRD first, prototype second. Operates in a no-questions mode, filling in detail from industry convention and stating assumptions explicitly, with mobile or desktop platform choice. Use this skill when the request starts from a rough product idea and asks for a document plus a clickable page in one pass.",
+  "permissions": [],
+  "runtime_type": "prompt_only",
+  "compatibility": {
+    "legacy_secret_env": false,
+    "min_linsywork_version": "0.3.0"
+  },
+  "schema_version": "1.0"
+}

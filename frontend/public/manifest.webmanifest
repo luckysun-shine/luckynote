@@ -1,13 +1,13 @@
 {
-  "name": "lucky账本 · LuckyNote",
-  "short_name": "lucky账本",
-  "description": "家庭记账，手机随时记一笔",
+  "name": "luckynest 记账",
+  "short_name": "luckynest",
+  "description": "幸运记账 · 账户独立 · 日历一看就懂",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait",
-  "background_color": "#FBF6F0",
-  "theme_color": "#E07A5F",
+  "background_color": "#F7F5FC",
+  "theme_color": "#8F6FD6",
   "lang": "zh-CN",
   "icons": [
     {
