@@ -6,16 +6,14 @@
 
 ## 推荐拉取分支
 
-日常部署与更新请使用 **`cursor/latest-d3e6`**（整合了日历、家庭/经营分开统计、UI 打磨等全部功能）。不要再逐个挑选历史功能分支。
+日常部署与更新请使用 **`main`**（已合并日历、家庭/经营分开统计、UI 打磨等全部功能）。不要再逐个挑选历史功能分支。
 
 ```bash
 git fetch origin
-git checkout cursor/latest-d3e6
-git pull origin cursor/latest-d3e6
+git checkout main
+git pull origin main
 docker compose up -d --build
 ```
-
-该分支合入 `main` 后，可改回只跟 `main`。
 
 ## 快速开始
 
