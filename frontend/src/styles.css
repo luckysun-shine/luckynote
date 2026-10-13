@@ -82,13 +82,17 @@ html,
 body,
 #root {
   margin: 0;
+  height: 100%;
   min-height: 100%;
+  min-height: 100dvh;
 }
 
 html {
   height: 100%;
   scroll-padding-top: 64px;
   scroll-padding-bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom, 0px) + 12px);
+  /* iOS 主屏幕 / Safari 填满可视高度 */
+  min-height: -webkit-fill-available;
 }
 
 body {
@@ -100,6 +104,9 @@ body {
   line-height: 1.5;
   font-weight: 400;
   font-size: 15px;
+  min-height: 100%;
+  min-height: 100dvh;
+  min-height: -webkit-fill-available;
 }
 
 .money,
@@ -2504,7 +2511,32 @@ textarea {
 @media (max-width: 860px) {
   .shell {
     grid-template-columns: 1fr;
-    padding-top: env(safe-area-inset-top);
+    padding-top: env(safe-area-inset-top, 0px);
+    min-height: 100dvh;
+    min-height: -webkit-fill-available;
+    /* 主内容区占满状态栏下方到屏幕底，底栏 fixed 叠在上方 */
+    display: flex;
+    flex-direction: column;
+  }
+
+  .shell > .main {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .shell > .main > .page-stack {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+  }
+
+  .shell > .main > .page-stack > .home-page {
+    flex: 1 1 auto;
+    min-height: 0;
   }
 
   .sider {
@@ -2661,8 +2693,49 @@ textarea {
   }
 
   .main {
-    padding: 12px 16px calc(var(--tabbar-h) + env(safe-area-inset-bottom, 0px) + 36px);
+    /* 底部只需让出 tabbar + home indicator，避免多余大块空白 */
+    padding: 10px 16px calc(var(--tabbar-h) + env(safe-area-inset-bottom, 0px) + 10px);
     overflow-x: hidden;
+  }
+
+  .home-page {
+    flex: 1 1 auto;
+    min-height: calc(
+      100dvh - env(safe-area-inset-top, 0px) - var(--tabbar-h) - env(safe-area-inset-bottom, 0px) - 20px
+    );
+  }
+
+  .home-recent {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    margin-top: 2px;
+  }
+
+  .home-recent-list {
+    flex: 1 1 auto;
+  }
+
+  .home-top {
+    margin-bottom: 12px;
+  }
+
+  .today-hero {
+    margin-bottom: 12px;
+    padding: 18px;
+  }
+
+  .quick-grid {
+    margin: 2px 0 12px;
+  }
+
+  .budget-card {
+    margin-bottom: 12px;
+  }
+
+  .home-family-row {
+    margin: 2px 0 12px;
   }
 
   .amount-field input {
@@ -3037,26 +3110,57 @@ textarea {
   color: var(--brand-d);
 }
 
+.home-page {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-width: 0;
+}
+
 .home-top {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 12px;
-  margin-bottom: 6px;
+  margin-bottom: 10px;
+}
+
+.home-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.home-logo {
+  width: 40px;
+  height: 40px;
+  flex: none;
+  object-fit: contain;
+  background: transparent;
+  border-radius: 0;
+  display: block;
+}
+
+.home-brand-text {
+  min-width: 0;
 }
 
 .home-top h2 {
   margin: 0;
-  font-size: 1.35rem;
+  font-size: 1.25rem;
   font-weight: 800;
   color: var(--ink);
-  line-height: 1.4;
+  line-height: 1.25;
 }
 
 .home-top .sub {
   margin: 2px 0 0;
   font-size: 0.7rem;
   color: var(--ink2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .home-switch {
@@ -4192,6 +4296,24 @@ textarea {
   .add-sheet-panel {
     width: min(380px, 100%);
     max-height: min(720px, 82vh);
+  }
+}
+
+/* iPhone「添加到主屏幕」standalone：贴合全面屏安全区 */
+@media (display-mode: standalone) and (max-width: 860px),
+  (display-mode: fullscreen) and (max-width: 860px) {
+  .shell {
+    padding-top: max(env(safe-area-inset-top, 0px), 12px);
+  }
+
+  .main {
+    padding-top: 8px;
+    padding-bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom, 0px) + 8px);
+  }
+
+  .tabbar {
+    padding-bottom: max(env(safe-area-inset-bottom, 0px), 8px);
+    height: calc(var(--tabbar-h) + max(env(safe-area-inset-bottom, 0px), 8px));
   }
 }
 

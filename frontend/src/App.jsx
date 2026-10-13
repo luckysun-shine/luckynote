@@ -1639,11 +1639,20 @@ function Home({ token, me, go, show, openSettings }) {
   return (
     <div className="home-page">
       <div className="home-top">
-        <div>
-          <h2>LuckyNote</h2>
-          <p className="sub">
-            {householdName} · {isLife ? "生活账" : "经营账"}
-          </p>
+        <div className="home-brand">
+          <img
+            className="home-logo"
+            src="/brand/luckynest-mark-transparent.png"
+            alt="luckynest"
+            width={40}
+            height={40}
+          />
+          <div className="home-brand-text">
+            <h2>LuckyNote</h2>
+            <p className="sub">
+              {householdName} · {isLife ? "生活账" : "经营账"}
+            </p>
+          </div>
         </div>
         <button type="button" className="home-switch" onClick={() => go("books")}>
           切换账本⌄
@@ -1759,23 +1768,25 @@ function Home({ token, me, go, show, openSettings }) {
         </div>
       )}
 
-      <div className="h-row" style={{ marginTop: 4 }}>
-        <span className="t" style={{ color: "var(--ink)", fontSize: "1rem" }}>
-          近期账单
-        </span>
-        <button type="button" className="more" onClick={() => go("bills")}>
-          全部账单 ›
-        </button>
-      </div>
-      {recent.length === 0 ? (
-        <div className="empty-state" style={{ margin: "8px 0 14px" }}>
-          这里还是空白，记下生活的第一笔吧。
+      <section className="home-recent">
+        <div className="h-row" style={{ marginTop: 4 }}>
+          <span className="t" style={{ color: "var(--ink)", fontSize: "1rem" }}>
+            近期账单
+          </span>
+          <button type="button" className="more" onClick={() => go("bills")}>
+            全部账单 ›
+          </button>
         </div>
-      ) : (
-        <div style={{ marginBottom: 14 }}>
-          <TxDayGroups rows={recent.slice(0, 8)} me={me} onEdit={(row) => setEditTx(row)} />
-        </div>
-      )}
+        {recent.length === 0 ? (
+          <div className="empty-state" style={{ margin: "8px 0 14px" }}>
+            这里还是空白，记下生活的第一笔吧。
+          </div>
+        ) : (
+          <div className="home-recent-list">
+            <TxDayGroups rows={recent.slice(0, 8)} me={me} onEdit={(row) => setEditTx(row)} />
+          </div>
+        )}
+      </section>
 
       {editTx && (
         <TxEditModal
