@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import {
   Area,
   AreaChart,
+  Bar,
+  BarChart,
   CartesianGrid,
   Cell,
   Pie,
@@ -11,6 +13,8 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+
+const STAT_COLORS = ["#8270d8", "#6ba3e8", "#5bb8a8", "#e8c45a", "#e89ab0", "#7a8fd4", "#a99ae8", "#4a9d93"];
 
 const API = "";
 
@@ -154,6 +158,66 @@ function money(n) {
   return Number(n || 0).toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+const CAT_DISPLAY = {
+  餐饮: "餐饮美食",
+  日用: "日用购物",
+  购物: "购物消费",
+  交通: "交通出行",
+  居住: "居家住房",
+  娱乐: "休闲娱乐",
+  医疗: "医疗健康",
+  教育: "学习成长",
+  人情: "人情往来",
+  其他支出: "更多分类",
+  工资: "工资收入",
+  奖金: "奖金红包",
+  报销: "报销入账",
+  其他收入: "其他收入",
+};
+
+function categoryLabel(name = "") {
+  return CAT_DISPLAY[name] || name;
+}
+
+function formatCnDate(iso = "") {
+  const d = iso.slice(0, 10);
+  if (!d) return "";
+  const [y, m, day] = d.split("-").map(Number);
+  return `${y}年${m}月${day}日`;
+}
+
+function formatDayHeading(iso = "") {
+  const d = iso.slice(0, 10);
+  if (!d) return "";
+  const dt = new Date(`${d}T12:00:00`);
+  const today = new Date();
+  const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+  const wd = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"][dt.getDay()];
+  const label = `${dt.getMonth() + 1}月${dt.getDate()}日 ${wd}`;
+  if (d === todayStr) return `今天 · ${label}`;
+  const yest = new Date(today);
+  yest.setDate(yest.getDate() - 1);
+  const yestStr = `${yest.getFullYear()}-${String(yest.getMonth() + 1).padStart(2, "0")}-${String(yest.getDate()).padStart(2, "0")}`;
+  if (d === yestStr) return `昨天 · ${label}`;
+  return label;
+}
+
+function groupTxByDay(rows = []) {
+  const map = new Map();
+  for (const t of rows) {
+    const d = t.occurred_at?.slice(0, 10) || "未知";
+    if (!map.has(d)) map.set(d, []);
+    map.get(d).push(t);
+  }
+  return [...map.entries()].sort((a, b) => b[0].localeCompare(a[0]));
+}
+
+function dayExpenseTotal(rows = []) {
+  return rows.filter((t) => t.type === "expense").reduce((s, t) => s + Number(t.amount || 0), 0);
+}
+
+const DRAFT_KEY = "ln_tx_draft";
+
 const ACCOUNT_KIND_LABELS = {
   cash: "现金",
   bank: "银行卡",
@@ -168,80 +232,382 @@ function accountKindLabel(kind) {
 }
 
 const BRAND_NAME = "luckynest";
-const BRAND_TAGLINE = "幸运记账 · 账户独立 · 日历一看就懂";
+const BRAND_TAGLINE = "每一笔，都是认真生活的印记";
+const BRAND_DESC = "和家人一起，把日子记得清楚一点。生活有规划，经营有底气。";
 
 const NAV = [
   ["home", "首页"],
-  ["calendar", "日历"],
-  ["add", "记一笔"],
-  ["accounts", "账户"],
+  ["bills", "账单"],
+  ["add", "记账"],
+  ["stats", "统计"],
   ["me", "我的"],
 ];
 
 const TABS = [
   { id: "home", label: "首页", icon: "home" },
-  { id: "calendar", label: "日历", icon: "calendar" },
-  { id: "add", label: "记一笔", icon: "plus", fab: true },
-  { id: "accounts", label: "账户", icon: "wallet" },
+  { id: "bills", label: "账单", icon: "bills" },
+  { id: "add", label: "记账", icon: "plus", fab: true },
+  { id: "stats", label: "统计", icon: "stats" },
   { id: "me", label: "我的", icon: "me" },
 ];
 
 const ME_PAGES = ["me", "more", "budget", "settings", "books", "backup", "ai", "biz", "family"];
+const HOME_SECONDARY = ["calendar", "accounts"];
 
-function TabIcon({ name }) {
+function Icon({ name, size = 22, strokeWidth = 1.8 }) {
   const common = {
-    width: 22,
-    height: 22,
+    width: size,
+    height: size,
     viewBox: "0 0 24 24",
     fill: "none",
     stroke: "currentColor",
-    strokeWidth: "1.8",
+    strokeWidth,
     strokeLinecap: "round",
     strokeLinejoin: "round",
     "aria-hidden": true,
   };
-  if (name === "home") {
-    return (
-      <svg {...common}>
-        <path d="M4 11l8-7 8 7" />
-        <path d="M6 10v10h12V10" />
-      </svg>
-    );
+  switch (name) {
+    case "home":
+      return (
+        <svg {...common}>
+          <path d="M4 11l8-7 8 7" />
+          <path d="M6 10v10h12V10" />
+        </svg>
+      );
+    case "bills":
+    case "notebook":
+      return (
+        <svg {...common}>
+          <path d="M8 3h9a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z" />
+          <path d="M10 8h6M10 12h6M10 16h4" />
+        </svg>
+      );
+    case "stats":
+    case "chart-pie":
+      return (
+        <svg {...common}>
+          <path d="M12 3a9 9 0 1 0 9 9h-9V3z" />
+          <path d="M14.2 3.4A9 9 0 0 1 20.6 9.8H14.2V3.4z" />
+        </svg>
+      );
+    case "me":
+    case "user":
+      return (
+        <svg {...common}>
+          <circle cx="12" cy="8" r="3.5" />
+          <path d="M5 19.5c1.4-3.2 4-4.8 7-4.8s5.6 1.6 7 4.8" />
+        </svg>
+      );
+    case "plus":
+      return (
+        <svg {...common} strokeWidth={2.2}>
+          <path d="M12 5v14M5 12h14" />
+        </svg>
+      );
+    case "calendar":
+    case "calendar-days":
+      return (
+        <svg {...common}>
+          <rect x="3.5" y="5" width="17" height="15.5" rx="2.5" />
+          <path d="M3.5 9.5h17M8 3.5v3.5M16 3.5v3.5M8 14h.01M12 14h.01M16 14h.01M8 17.5h.01M12 17.5h.01" />
+        </svg>
+      );
+    case "chart":
+    case "budget":
+      return (
+        <svg {...common}>
+          <path d="M4 19V5M4 19h16" />
+          <path d="M8 15l3.5-4.5 3 2.5L19 7" />
+        </svg>
+      );
+    case "wallet":
+      return (
+        <svg {...common}>
+          <path d="M3.5 8.5h17v10a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2v-10z" />
+          <path d="M3.5 8.5l2-3.2A2 2 0 0 1 7.2 4.5h9.6a2 2 0 0 1 1.7.9l2 3.1" />
+          <circle cx="16.5" cy="14" r="1.2" fill="currentColor" stroke="none" />
+        </svg>
+      );
+    case "users":
+    case "family":
+      return (
+        <svg {...common}>
+          <circle cx="9" cy="8" r="3.2" />
+          <circle cx="16.5" cy="9" r="2.4" />
+          <path d="M3.8 19c1.1-3 3.3-4.5 5.2-4.5S14 16 15.2 19" />
+          <path d="M14.2 14.6c1.3-.4 2.8-.2 4.3 1.8" />
+        </svg>
+      );
+    case "chevron-left":
+      return (
+        <svg {...common}>
+          <path d="M15 6l-6 6 6 6" />
+        </svg>
+      );
+    case "chevron-right":
+      return (
+        <svg {...common}>
+          <path d="M9 6l6 6-6 6" />
+        </svg>
+      );
+    case "utensils":
+      return (
+        <svg {...common}>
+          <path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2" />
+          <path d="M7 2v20" />
+          <path d="M21 15V2v0a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3z" />
+          <path d="M21 15v7" />
+        </svg>
+      );
+    case "shopping-basket":
+      return (
+        <svg {...common}>
+          <path d="M5 11h14l-1 7.5a2 2 0 0 1-2 1.5H8a2 2 0 0 1-2-1.5L5 11z" />
+          <path d="M8.5 11 10 6h4l1.5 5" />
+          <path d="M10 14v3M14 14v3" />
+        </svg>
+      );
+    case "train":
+    case "train-front":
+      return (
+        <svg {...common}>
+          <rect x="6" y="3.5" width="12" height="14" rx="3" />
+          <path d="M6 12h12M9 16.5v2.5M15 16.5v2.5M8.5 7.5h3M12.5 7.5h3" />
+          <circle cx="9.5" cy="14" r="0.9" fill="currentColor" stroke="none" />
+          <circle cx="14.5" cy="14" r="0.9" fill="currentColor" stroke="none" />
+        </svg>
+      );
+    case "house":
+      return (
+        <svg {...common}>
+          <path d="M4 10.5 12 4l8 6.5" />
+          <path d="M6.5 9.5V20h11V9.5" />
+          <path d="M10 20v-6h4v6" />
+        </svg>
+      );
+    case "coffee":
+      return (
+        <svg {...common}>
+          <path d="M5 9h11v5a4 4 0 0 1-4 4H9a4 4 0 0 1-4-4V9z" />
+          <path d="M16 10h1.5a2.5 2.5 0 0 1 0 5H16" />
+          <path d="M8 4.5c.5.8.5 1.5 0 2.2M11 4.5c.5.8.5 1.5 0 2.2" />
+          <path d="M6 20h10" />
+        </svg>
+      );
+    case "heart-pulse":
+      return (
+        <svg {...common}>
+          <path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.5A4 4 0 0 1 19 10c0 5.6-7 10-7 10z" />
+          <path d="M8.5 11h2l1.2-2.5L13.5 14l1.2-3H16" />
+        </svg>
+      );
+    case "graduation-cap":
+      return (
+        <svg {...common}>
+          <path d="M2.5 9.5L12 4.5l9.5 5-9.5 5-9.5-5z" />
+          <path d="M6.5 11.5v4.2c0 .6 2.4 2.3 5.5 2.3s5.5-1.7 5.5-2.3v-4.2" />
+          <path d="M21.5 9.5v5" />
+        </svg>
+      );
+    case "ellipsis":
+      return (
+        <svg {...common}>
+          <circle cx="6" cy="12" r="1.3" fill="currentColor" stroke="none" />
+          <circle cx="12" cy="12" r="1.3" fill="currentColor" stroke="none" />
+          <circle cx="18" cy="12" r="1.3" fill="currentColor" stroke="none" />
+        </svg>
+      );
+    case "briefcase":
+      return (
+        <svg {...common}>
+          <rect x="3.5" y="7" width="17" height="12.5" rx="2" />
+          <path d="M9 7V5.5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2V7M3.5 12h17" />
+        </svg>
+      );
+    case "gift":
+      return (
+        <svg {...common}>
+          <rect x="4" y="11" width="16" height="9" rx="1.5" />
+          <path d="M4 11h16v-2.5a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2V11zM12 6.5v13.5" />
+          <path d="M12 6.5c-1.8-2.4-4.5-1.2-4.5.6S9.8 8.5 12 6.5zM12 6.5c1.8-2.4 4.5-1.2 4.5.6S14.2 8.5 12 6.5z" />
+        </svg>
+      );
+    case "package":
+      return (
+        <svg {...common}>
+          <path d="M12 3l8 4.5v9L12 21l-8-4.5v-9L12 3z" />
+          <path d="M12 12l8-4.5M12 12v9M12 12L4 7.5" />
+        </svg>
+      );
+    case "sparkles":
+      return (
+        <svg {...common}>
+          <path d="M12 3l1.2 4.2L17.5 8.5 13.2 9.8 12 14l-1.2-4.2L6.5 8.5l4.3-1.3L12 3z" />
+          <path d="M18.5 14l.7 2.2 2.3.7-2.3.7-.7 2.2-.7-2.2-2.3-.7 2.3-.7.7-2.2z" />
+        </svg>
+      );
+    case "gamepad":
+      return (
+        <svg {...common}>
+          <rect x="3" y="8" width="18" height="10" rx="4" />
+          <path d="M8 13h2M9 12v2M15.2 12.5h.01M17.2 14h.01" />
+        </svg>
+      );
+    case "pill":
+      return (
+        <svg {...common}>
+          <path d="M9.5 4.5l10 10a3.5 3.5 0 0 1-5 5l-10-10a3.5 3.5 0 0 1 5-5z" />
+          <path d="M8.2 10.8l5 5" />
+        </svg>
+      );
+    case "book":
+      return (
+        <svg {...common}>
+          <path d="M5 5.5A2.5 2.5 0 0 1 7.5 3H19v15.5H7.5A2.5 2.5 0 0 0 5 21V5.5z" />
+          <path d="M5 18.5h14" />
+        </svg>
+      );
+    case "paperclip":
+      return (
+        <svg {...common}>
+          <path d="M15.5 7.5 8.2 14.8a3 3 0 0 0 4.2 4.2l8.1-8.1a5 5 0 0 0-7.1-7.1L5.2 12a1.5 1.5 0 0 0 2.1 2.1l7.5-7.5" />
+        </svg>
+      );
+    case "backspace":
+      return (
+        <svg {...common}>
+          <path d="M8 6h11a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H8l-5-6 5-6z" />
+          <path d="M12 10l4 4M16 10l-4 4" />
+        </svg>
+      );
+    case "circle-check":
+      return (
+        <svg {...common}>
+          <circle cx="12" cy="12" r="9" />
+          <path d="M8.5 12.5l2.2 2.2 4.8-5" />
+        </svg>
+      );
+    case "cloud-check":
+      return (
+        <svg {...common}>
+          <path d="M6.5 17.5h11a4 4 0 0 0 .3-8 5.5 5.5 0 0 0-10.5 1.8A3.5 3.5 0 0 0 6.5 17.5z" />
+          <path d="M9.5 13.2l1.8 1.8 3.4-3.5" />
+        </svg>
+      );
+    case "shapes":
+      return (
+        <svg {...common}>
+          <path d="M12 3l4 7H8l4-7z" />
+          <rect x="3.5" y="13" width="7" height="7" rx="1.2" />
+          <circle cx="17.5" cy="16.5" r="3.5" />
+        </svg>
+      );
+    case "bell":
+      return (
+        <svg {...common}>
+          <path d="M6 16v-4a6 6 0 0 1 12 0v4l2 3H4l2-3z" />
+          <path d="M10 19a2 2 0 0 0 4 0" />
+        </svg>
+      );
+    case "download":
+      return (
+        <svg {...common}>
+          <path d="M12 4v10M8 10l4 4 4-4" />
+          <path d="M5 18h14" />
+        </svg>
+      );
+    case "repeat":
+      return (
+        <svg {...common}>
+          <path d="M17 2l4 4-4 4" />
+          <path d="M3 11V9a4 4 0 0 1 4-4h14" />
+          <path d="M7 22l-4-4 4-4" />
+          <path d="M21 13v2a4 4 0 0 1-4 4H3" />
+        </svg>
+      );
+    case "shield-check":
+      return (
+        <svg {...common}>
+          <path d="M12 3l7 3v5c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6l7-3z" />
+          <path d="M9 12l2 2 4-4" />
+        </svg>
+      );
+    case "info":
+      return (
+        <svg {...common}>
+          <circle cx="12" cy="12" r="9" />
+          <path d="M12 10v6M12 7.5h.01" />
+        </svg>
+      );
+    case "lock":
+      return (
+        <svg {...common}>
+          <rect x="5" y="11" width="14" height="10" rx="2" />
+          <path d="M8 11V8a4 4 0 0 1 8 0v3" />
+        </svg>
+      );
+    default:
+      return null;
   }
-  if (name === "calendar") {
-    return (
-      <svg {...common}>
-        <rect x="4" y="5" width="16" height="15" rx="3" />
-        <path d="M4 9h16M8 3v4M16 3v4" />
-        <path d="M8.5 13.5l2 2 4-4" />
-      </svg>
-    );
+}
+
+function resolveCategoryIcon(name = "", emoji = "") {
+  const n = String(name);
+  const pairs = [
+    [/餐饮|美食|吃饭|外卖/, "utensils"],
+    [/日用|购物|超市|淘宝/, "shopping-basket"],
+    [/交通|出行|地铁|打车/, "train-front"],
+    [/居家|住房|居住|房租|水电/, "house"],
+    [/休闲|娱乐|咖啡|电影/, "coffee"],
+    [/医疗|健康|医院/, "heart-pulse"],
+    [/学习|成长|教育/, "graduation-cap"],
+    [/工资|薪水/, "briefcase"],
+    [/奖金|红包|人情|礼物/, "gift"],
+    [/进货|成本|材料|包装/, "package"],
+    [/游戏/, "gamepad"],
+    [/药/, "pill"],
+    [/书|课/, "book"],
+    [/其他|更多|杂/, "ellipsis"],
+  ];
+  for (const [re, key] of pairs) {
+    if (re.test(n)) return key;
   }
-  if (name === "wallet") {
-    return (
-      <svg {...common}>
-        <path d="M3 9h18v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V9z" />
-        <path d="M3 9l2.2-3.5A2 2 0 0 1 6.9 4.5h10.2a2 2 0 0 1 1.7.95L21 9" />
-        <circle cx="16.5" cy="14.5" r="1.2" fill="currentColor" stroke="none" />
-      </svg>
-    );
-  }
-  if (name === "me") {
-    return (
-      <svg {...common}>
-        <circle cx="12" cy="8" r="4" />
-        <path d="M4.5 20c1.5-3.5 4.5-5 7.5-5s6 1.5 7.5 5" />
-      </svg>
-    );
-  }
-  if (name === "plus") {
-    return (
-      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden>
-        <path d="M12 5v14M5 12h14" />
-      </svg>
-    );
-  }
-  return null;
+  const emojiMap = {
+    "🍜": "utensils",
+    "🚌": "train-front",
+    "🏠": "house",
+    "🧴": "shopping-basket",
+    "🛍️": "shopping-basket",
+    "🎮": "coffee",
+    "💊": "heart-pulse",
+    "📚": "graduation-cap",
+    "🎁": "gift",
+    "✨": "ellipsis",
+    "💼": "briefcase",
+    "🎉": "gift",
+    "📎": "sparkles",
+    "🍀": "ellipsis",
+    "📦": "package",
+    "🧾": "sparkles",
+    "🛠️": "sparkles",
+    "🎨": "sparkles",
+    "🛒": "shopping-basket",
+  };
+  return emojiMap[emoji] || "ellipsis";
+}
+
+function CategoryIcon({ name, emoji, size = 22, className = "" }) {
+  const iconName = resolveCategoryIcon(name, emoji);
+  const glyph = Icon({ name: iconName, size }) || Icon({ name: "ellipsis", size });
+  return (
+    <span className={`cat-icon ${className}`} aria-hidden>
+      {glyph}
+    </span>
+  );
+}
+
+function TabIcon({ name }) {
+  return <Icon name={name} size={22} />;
 }
 
 const WEEKDAYS = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"];
@@ -320,7 +686,7 @@ export default function App() {
           <img className="brand-logo" src="/brand/luckynest-mark.png" alt="" width="52" height="52" />
           <div>
             <h1 className="brand-cn">{BRAND_NAME}</h1>
-            <p>家庭账本 · 幸运记账</p>
+            <p>家庭账本 · 认真生活</p>
           </div>
         </button>
         <nav className="nav">
@@ -349,10 +715,12 @@ export default function App() {
       </aside>
       <main className="main">
         <div className="page-stack">
-        {page === "home" && <Home token={token} me={me} go={go} show={show} />}
+        {page === "home" && <Home token={token} me={me} go={go} show={show} openSettings={openSettings} />}
+        {page === "bills" && <BillsPage token={token} me={me} show={show} go={go} />}
+        {page === "stats" && <StatsPage token={token} me={me} go={go} show={show} />}
         {page === "books" && <Books token={token} me={me} show={show} />}
         {page === "calendar" && <CalendarPage token={token} me={me} show={show} go={go} />}
-        {page === "accounts" && <AccountsHome token={token} me={me} show={show} openSettings={openSettings} />}
+        {page === "accounts" && <AccountsHome token={token} me={me} show={show} go={go} openSettings={openSettings} />}
         {page === "biz" && <Biz token={token} me={me} show={show} />}
         {page === "budget" && <Budget token={token} show={show} />}
         {(page === "settings" || page === "family") && (
@@ -382,7 +750,9 @@ export default function App() {
             ? addOpen
             : tab.id === "me"
               ? ME_PAGES.includes(page)
-              : page === tab.id;
+              : tab.id === "home"
+                ? page === "home" || HOME_SECONDARY.includes(page)
+                : page === tab.id;
           return (
             <button
               key={tab.id}
@@ -403,8 +773,10 @@ export default function App() {
       {addOpen && (
         <AddSheet
           token={token}
+          me={me}
           show={show}
           onClose={() => setAddOpen(false)}
+          onGoBills={() => setPage("bills")}
         />
       )}
       {toast && (
@@ -416,12 +788,55 @@ export default function App() {
   );
 }
 
+function WelcomeIcon({ name }) {
+  const common = {
+    width: 24,
+    height: 24,
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: "1.8",
+    strokeLinecap: "round",
+    strokeLinejoin: "round",
+    "aria-hidden": true,
+  };
+  if (name === "house") {
+    return (
+      <svg {...common}>
+        <path d="M4 11l8-7 8 7" />
+        <path d="M6 10v10h12V10" />
+      </svg>
+    );
+  }
+  if (name === "users") {
+    return (
+      <svg {...common}>
+        <circle cx="9" cy="8" r="3.2" />
+        <circle cx="16.5" cy="9" r="2.4" />
+        <path d="M3.5 19c1.2-3 3.5-4.5 5.5-4.5S13.3 16 14.5 19" />
+        <path d="M14 14.8c1.4-.4 3-.2 4.5 1.7" />
+      </svg>
+    );
+  }
+  if (name === "calendar") {
+    return (
+      <svg {...common}>
+        <rect x="4" y="5" width="16" height="15" rx="3" />
+        <path d="M4 9h16M8 3v4M16 3v4" />
+      </svg>
+    );
+  }
+  return null;
+}
+
 function Login({ onLogin, show, toast }) {
+  const [step, setStep] = useState("welcome"); // welcome | login | join
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [busy, setBusy] = useState(false);
   const [remember, setRemember] = useState(true);
+  const [agreed, setAgreed] = useState(true);
 
   async function submit(e) {
     e.preventDefault();
@@ -450,69 +865,138 @@ function Login({ onLogin, show, toast }) {
     if (saved) setUsername(saved);
   }, []);
 
+  function openAuth(next) {
+    if (!agreed) {
+      show("请先阅读并同意用户协议与隐私政策");
+      return;
+    }
+    setStep(next);
+  }
+
   return (
     <div className="login-wrap">
       <div className="login-stage">
-        <header className="login-hero">
-          <h1 className="sr-only">{BRAND_NAME}</h1>
-          <img
-            className="login-logo"
-            src="/brand/luckynest-logo.png"
-            alt="luckynest"
-            width="168"
-            height="168"
-          />
-          <p className="login-tagline">{BRAND_TAGLINE}</p>
-        </header>
-
-        <form className="login-panel" onSubmit={submit} noValidate>
-          <h2 className="login-panel-title">账号登录</h2>
-          <p className="login-panel-sub">使用家庭账号进入账本</p>
-
-          <label className="login-field">
-            <span>用户名</span>
-            <input
-              autoComplete="username"
-              name="username"
-              placeholder="请输入用户名"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              disabled={busy}
-            />
-          </label>
-
-          <label className="login-field">
-            <span>密码</span>
-            <div className="login-password-row">
-              <input
-                type={showPassword ? "text" : "password"}
-                autoComplete="current-password"
-                name="password"
-                placeholder="请输入密码"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                disabled={busy}
+        {step === "welcome" ? (
+          <>
+            <header className="login-hero">
+              <h1 className="sr-only">{BRAND_NAME}</h1>
+              <img
+                className="login-logo"
+                src="/brand/luckynest-logo.png"
+                alt="luckynest"
+                width="220"
+                height="165"
               />
-              <button
-                type="button"
-                className="login-eye"
-                onClick={() => setShowPassword((v) => !v)}
-                aria-label={showPassword ? "隐藏密码" : "显示密码"}
-              >
-                {showPassword ? "隐藏" : "显示"}
-              </button>
+              <p className="login-brand brand-cn" aria-hidden>
+                {BRAND_NAME}
+              </p>
+              <p className="login-tagline">{BRAND_TAGLINE}</p>
+              <p className="login-desc">{BRAND_DESC}</p>
+            </header>
+
+            <div className="welcome-values">
+              {[
+                ["house", "生活与经营，各有一本账", "家庭收支和店铺往来，清晰分开"],
+                ["users", "一家人，一起记录", "共享账本、分工记账，权限可控"],
+                ["calendar", "让每一天心中有数", "日历查账、预算提醒，照顾日常"],
+              ].map(([icon, title, desc]) => (
+                <div className="welcome-value" key={title}>
+                  <span className="welcome-value-icon">
+                    <WelcomeIcon name={icon} />
+                  </span>
+                  <div>
+                    <strong>{title}</strong>
+                    <span>{desc}</span>
+                  </div>
+                </div>
+              ))}
             </div>
-          </label>
 
-          <label className="login-remember">
-            <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} />
-            记住我
-          </label>
+            <div className="welcome-actions">
+              <button type="button" className="btn" onClick={() => openAuth("login")}>
+                + 创建我的家庭账本
+              </button>
+              <button type="button" className="btn secondary" onClick={() => openAuth("join")}>
+                已有家庭？加入家庭账本
+              </button>
+              <label className="welcome-agree">
+                <input type="checkbox" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} />
+                <span>已阅读并同意《用户协议》和《隐私政策》</span>
+              </label>
+              <p className="welcome-note">本原型中的金额与家庭信息均为示例</p>
+            </div>
+          </>
+        ) : (
+          <>
+            <button type="button" className="login-back" onClick={() => setStep("welcome")}>
+              ← 返回
+            </button>
+            <header className="login-hero">
+              <img
+                className="login-logo"
+                src="/brand/luckynest-logo.png"
+                alt="luckynest"
+                width="120"
+                height="120"
+                style={{ width: 96, height: 96 }}
+              />
+            </header>
+            <form className="login-panel" onSubmit={submit} noValidate>
+              <h2 className="login-panel-title">
+                {step === "join" ? "加入家庭账本" : "创建 / 登录账本"}
+              </h2>
+              <p className="login-panel-sub">
+                {step === "join"
+                  ? "请使用家长在「家庭成员」里为你创建的账号登录。"
+                  : "使用家庭账号登录。新家庭请先用管理员账号进入。"}
+              </p>
 
-          <button className="btn login-submit" disabled={busy}>
-            {busy ? "登录中…" : "登 录"}
-          </button>
-        </form>
+              <label className="login-field">
+                <span>用户名</span>
+                <input
+                  autoComplete="username"
+                  name="username"
+                  placeholder="请输入用户名"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  disabled={busy}
+                />
+              </label>
+
+              <label className="login-field">
+                <span>密码</span>
+                <div className="login-password-row">
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    autoComplete="current-password"
+                    name="password"
+                    placeholder="请输入密码"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    disabled={busy}
+                  />
+                  <button
+                    type="button"
+                    className="login-eye"
+                    onClick={() => setShowPassword((v) => !v)}
+                    aria-label={showPassword ? "隐藏密码" : "显示密码"}
+                  >
+                    {showPassword ? "隐藏" : "显示"}
+                  </button>
+                </div>
+              </label>
+
+              <label className="login-remember">
+                <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} />
+                记住我
+              </label>
+
+              <button className="btn login-submit" disabled={busy}>
+                {busy ? "登录中…" : step === "join" ? "加入并登录" : "登录账本"}
+              </button>
+            </form>
+          </>
+        )}
       </div>
       {toast && (
         <div className="toast" role="status" aria-live="polite">
@@ -524,61 +1008,65 @@ function Login({ onLogin, show, toast }) {
 }
 
 function MeHub({ me, go, openSettings, logout }) {
+  const roleLabel = me?.user.role === "owner" ? "家长管理员" : me?.user.role === "viewer" ? "只读成员" : "记账成员";
   const groups = [
     {
-      title: "账户",
       items: [
-        ["profile", "我的资料", "头像、登录名、昵称与改密", () => openSettings("profile")],
-        ["members", "家庭成员", "添加家人、角色与微信别名", () => openSettings("members")],
-        ["accounts", "资金账户", "现金、银行卡、微信/支付宝", () => go("accounts")],
+        ["ledgers", "notebook", "账本管理", `${me?.household?.name || "家庭"} · 生活/经营`, () => openSettings("ledgers")],
+        ["members", "users", "家庭成员", roleLabel, () => openSettings("members")],
       ],
     },
     {
-      title: "账本与预算",
       items: [
-        ["books", "账本流水", "查看三本账与流水明细", () => go("books")],
-        ["ledgers", "账本配置", "新建、编辑、封面与删除", () => openSettings("ledgers")],
-        ["budget", "预算", "给这个月设一条提醒线", () => go("budget")],
-        ["biz", "经营副业", "副业收支与毛利单独一本账", () => go("biz")],
+        ["cats", "shapes", "分类管理", "生活与经营分类", () => openSettings("ledgers")],
+        ["books", "repeat", "账本流水", "按账本查看", () => go("books")],
+        ["budget", "bell", "预算提醒", "本月提醒线", () => go("budget")],
+        ["backup", "download", "导出与备份", "本地与 NAS 备份", () => go("backup")],
       ],
     },
     {
-      title: "数据与智能",
       items: [
-        ["backup", "数据备份", "手动备份、定时备份与恢复", () => go("backup")],
-        ["ai", "微信 / AI", "OpenClaw Token 与语音入账", () => go("ai")],
+        ["ai", "cloud-check", "微信 / AI 同步", "OpenClaw 语音入账", () => go("ai")],
+        ["accounts", "shield-check", "账户资产", "现金、银行卡、钱包", () => go("accounts")],
+        ["stats", "chart-pie", "统计分析", "构成与趋势", () => go("stats")],
+        ["profile", "info", "关于与资料", `luckynest · @${me?.user?.username || ""}`, () => openSettings("profile")],
       ],
     },
   ];
 
   return (
-    <div className="me-hub">
+    <div className="me-hub figma-me">
+      <div className="me-page-head">
+        <h2>我的</h2>
+        <p className="add-page-sub">{me?.household?.name || "家庭账本"}</p>
+      </div>
+
       <button type="button" className="me-hero" onClick={() => openSettings("profile")}>
-        <UserAvatar user={me?.user} size={64} />
+        <UserAvatar user={me?.user} size={58} />
         <div className="me-hero-text">
           <strong>{me?.user.display_name}</strong>
           <span className="muted">
-            @{me?.user.username} · {me?.user.role === "owner" ? "家长" : me?.user.role === "viewer" ? "只读" : "成员"}
+            @{me?.user.username} · {me?.household?.name}
           </span>
-          <span className="muted">{me?.household?.name}</span>
+          <span className="me-role-pill">{roleLabel}</span>
         </div>
         <span className="me-chevron" aria-hidden>
-          ›
+          <Icon name="chevron-right" size={18} />
         </span>
       </button>
 
-      {groups.map((g) => (
-        <section key={g.title} className="me-group">
-          <h3 className="me-group-title">{g.title}</h3>
+      {groups.map((g, gi) => (
+        <section key={gi} className="me-group">
           <div className="me-list">
-            {g.items.map(([id, title, desc, action]) => (
-              <button key={id} type="button" className="me-row" onClick={action}>
-                <div className="me-row-text">
-                  <strong>{title}</strong>
-                  <span className="muted">{desc}</span>
-                </div>
+            {g.items.map(([id, icon, title, value, action]) => (
+              <button key={id} type="button" className="me-row me-row-figma" onClick={action}>
+                <span className="me-row-icon">
+                  <Icon name={icon} size={18} />
+                </span>
+                <span className="me-row-label">{title}</span>
+                <span className="me-row-value">{value}</span>
                 <span className="me-chevron" aria-hidden>
-                  ›
+                  <Icon name="chevron-right" size={15} />
                 </span>
               </button>
             ))}
@@ -586,11 +1074,13 @@ function MeHub({ me, go, openSettings, logout }) {
         </section>
       ))}
 
-      <div className="card install-card">
-        <h3>添加到手机主屏幕</h3>
-        <p className="muted">
-          iPhone：Safari → 分享 →「添加到主屏幕」。安卓 Chrome：菜单 →「添加到主屏幕」或「安装应用」。
-        </p>
+      <p className="me-lock-note">
+        <Icon name="lock" size={15} />
+        <span>数据保存在家庭 NAS，仅家人可见</span>
+      </p>
+      <div className="me-brand-sign">
+        <img src="/brand/luckynest-mark.png" alt="" width="40" height="30" />
+        <span>luckynest · 认真生活</span>
       </div>
 
       <button className="btn ghost logout-btn" onClick={logout}>
@@ -672,6 +1162,7 @@ function CalendarPage({ token, me, show, go }) {
   const [dayTick, setDayTick] = useState(0);
   const [editTx, setEditTx] = useState(null);
   const [txMeta, setTxMeta] = useState({ ledgers: [], accounts: [], cats: [] });
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   const personQs = personId ? `&owner_user_id=${personId}` : "";
   const visibleMembers = members.filter((m) => me?.user.role === "owner" || m.id === me?.user.id);
@@ -785,36 +1276,60 @@ function CalendarPage({ token, me, show, go }) {
   const dayMap = Object.fromEntries((monthData?.days || []).map((d) => [d.date, d]));
   const blanks = leadingBlanks(year, month);
   const totalDays = daysInMonth(year, month);
+  const prevMonth = month === 1 ? 12 : month - 1;
+  const prevYear = month === 1 ? year - 1 : year;
+  const prevDays = daysInMonth(prevYear, prevMonth);
   const cells = [];
-  for (let i = 0; i < blanks; i++) cells.push(null);
-  for (let d = 1; d <= totalDays; d++) cells.push(d);
+  for (let i = 0; i < blanks; i++) {
+    cells.push({ day: prevDays - blanks + i + 1, outside: true, dir: "prev" });
+  }
+  for (let d = 1; d <= totalDays; d++) {
+    cells.push({ day: d, outside: false });
+  }
+  const remain = (7 - (cells.length % 7)) % 7;
+  for (let i = 1; i <= remain; i++) {
+    cells.push({ day: i, outside: true, dir: "next" });
+  }
 
   const selectedKey = selectedDay ? `${year}-${pad2(month)}-${pad2(selectedDay)}` : null;
   const selectedCell = selectedKey ? dayMap[selectedKey] : null;
   const isToday = (d) =>
-    d && year === now.getFullYear() && month === now.getMonth() + 1 && d === now.getDate();
+    d && !d.outside && year === now.getFullYear() && month === now.getMonth() + 1 && d.day === now.getDate();
+
+  const weekdayLabel = selectedDay
+    ? WEEKDAYS[(leadingBlanks(year, month) + selectedDay - 1) % 7]
+    : "";
+  const scopeLabel =
+    scope === "business" ? "经营账" : scope === "all" ? "全部账本" : "生活账";
+  const goToday = () => {
+    const t = new Date();
+    setYear(t.getFullYear());
+    setMonth(t.getMonth() + 1);
+    setSelectedDay(t.getDate());
+    setMode("month");
+  };
 
   return (
     <div className="calendar-page">
-      <div className="page-head">
-        <div>
-          <h2 className="hello">收支日历</h2>
-          <p className="sub">
-            {selectedPerson
-              ? `正在看 ${selectedPerson.display_name} 的个人账本`
-              : scope === "business"
-                ? "当前只统计经营账，不计入生活总额。"
-                : scope === "all"
-                  ? "对照模式：生活账与经营账会加总显示。"
-                  : "默认只看生活账；经营请切到「经营」单独查看。"}
-          </p>
+      <div className="cal-page-head">
+        <div className="cal-page-head-row">
+          <button type="button" className="cal-back" onClick={() => go("home")} aria-label="返回首页">
+            <Icon name="chevron-left" size={20} />
+            <h2>日历查账</h2>
+          </button>
+          <button type="button" className="text-link" onClick={goToday}>
+            今天
+          </button>
         </div>
-        <button className="btn desktop-only" type="button" onClick={() => go("add")}>
-          记一笔
-        </button>
+        <p className="cal-page-sub">
+          {me?.household?.name || "家庭"} · {selectedPerson ? selectedPerson.display_name : scopeLabel}
+        </p>
       </div>
 
-      <div className="cal-toolbar">
+      <div className="cal-filter-toggle-row">
+        <button type="button" className="cal-filter-toggle" onClick={() => setFiltersOpen((v) => !v)}>
+          {filtersOpen ? "收起筛选" : "筛选账本 / 成员"}
+        </button>
         <Segmented
           value={mode}
           options={[
@@ -823,65 +1338,53 @@ function CalendarPage({ token, me, show, go }) {
           ]}
           onChange={setMode}
         />
-        <FilterBar label="账本">
-          {CAL_SCOPES.map(([id, label]) => (
-            <FilterChip key={id} active={scope === id} onClick={() => setScope(id)}>
-              {label}
-            </FilterChip>
-          ))}
-        </FilterBar>
-        <FilterBar label="成员">
-          <FilterChip active={!personId} onClick={() => setPersonId("")}>
-            全家人
-          </FilterChip>
-          {visibleMembers.map((m) => (
-            <FilterChip
-              key={m.id}
-              active={String(personId) === String(m.id)}
-              onClick={() => setPersonId(String(m.id))}
-              className="person-filter"
-            >
-              <UserAvatar user={m} size={20} />
-              {m.display_name}
-            </FilterChip>
-          ))}
-        </FilterBar>
       </div>
+      {filtersOpen && (
+        <div className="cal-toolbar">
+          <FilterBar label="账本">
+            {CAL_SCOPES.map(([id, label]) => (
+              <FilterChip key={id} active={scope === id} onClick={() => setScope(id)}>
+                {label}
+              </FilterChip>
+            ))}
+          </FilterBar>
+          <FilterBar label="成员">
+            <FilterChip active={!personId} onClick={() => setPersonId("")}>
+              全家人
+            </FilterChip>
+            {visibleMembers.map((m) => (
+              <FilterChip
+                key={m.id}
+                active={String(personId) === String(m.id)}
+                onClick={() => setPersonId(String(m.id))}
+                className="person-filter"
+              >
+                <UserAvatar user={m} size={20} />
+                {m.display_name}
+              </FilterChip>
+            ))}
+          </FilterBar>
+        </div>
+      )}
 
       {mode === "month" && (
         <>
           <div className="cal-nav">
-            <button type="button" className="btn ghost btn-sm" onClick={() => shiftMonth(-1)}>
-              上月
+            <button type="button" className="cal-nav-btn" onClick={() => shiftMonth(-1)} aria-label="上月">
+              <Icon name="chevron-left" size={20} />
             </button>
             <strong className="cal-title">
-              {year} 年 {month} 月
+              {year}年{month}月
             </strong>
-            <button type="button" className="btn ghost btn-sm" onClick={() => shiftMonth(1)}>
-              下月
+            <button type="button" className="cal-nav-btn" onClick={() => shiftMonth(1)} aria-label="下月">
+              <Icon name="chevron-right" size={20} />
             </button>
           </div>
 
           {monthData && (
-            <div className="row three cal-summary">
-              <div className="card sage">
-                <div className="label">
-                  {scope === "business" ? "经营收入" : scope === "all" ? "合计收入" : "生活收入"}
-                </div>
-                <div className="num">¥ {money(monthData.summary.income)}</div>
-              </div>
-              <div className="card coral">
-                <div className="label">
-                  {scope === "business" ? "经营支出" : scope === "all" ? "合计支出" : "生活支出"}
-                </div>
-                <div className="num">¥ {money(monthData.summary.expense)}</div>
-              </div>
-              <div className="card butter">
-                <div className="label">
-                  {scope === "business" ? "经营结余" : scope === "all" ? "合计结余" : "生活结余"}
-                </div>
-                <div className="num">¥ {money(monthData.summary.balance)}</div>
-              </div>
+            <div className="cal-summary-inline">
+              <span className="cal-sum-in">收入 ¥{money(monthData.summary.income)}</span>
+              <span className="cal-sum-out">支出 ¥{money(monthData.summary.expense)}</span>
             </div>
           )}
 
@@ -892,8 +1395,16 @@ function CalendarPage({ token, me, show, go }) {
               ))}
             </div>
             <div className="cal-grid">
-              {cells.map((d, i) => {
-                if (!d) return <div key={`b${i}`} className="cal-cell empty" />;
+              {cells.map((cellMeta, i) => {
+                if (cellMeta.outside) {
+                  return (
+                    <div key={`o${i}`} className="cal-cell outside" aria-hidden>
+                      <span className="cal-day-num">{cellMeta.day}</span>
+                      <span className="cal-dots" />
+                    </div>
+                  );
+                }
+                const d = cellMeta.day;
                 const key = `${year}-${pad2(month)}-${pad2(d)}`;
                 const cell = dayMap[key];
                 const on = selectedDay === d;
@@ -901,45 +1412,56 @@ function CalendarPage({ token, me, show, go }) {
                   <button
                     key={key}
                     type="button"
-                    className={`cal-cell ${on ? "on" : ""} ${isToday(d) ? "today" : ""} ${cell ? "has-tx" : ""}`}
+                    className={`cal-cell ${on ? "on" : ""} ${isToday(cellMeta) ? "today" : ""}`}
                     onClick={() => setSelectedDay(d)}
                   >
                     <span className="cal-day-num">{d}</span>
-                    {cell ? (
-                      <span className="cal-amounts">
-                        {cell.income > 0 && <span className="cal-in">+{money(cell.income)}</span>}
-                        {cell.expense > 0 && <span className="cal-out">-{money(cell.expense)}</span>}
-                      </span>
-                    ) : (
-                      <span className="cal-amounts muted">·</span>
-                    )}
+                    <span className="cal-dots" aria-hidden>
+                      {cell?.income > 0 && <i className="dot in" />}
+                      {cell?.expense > 0 && <i className="dot out" />}
+                    </span>
                   </button>
                 );
               })}
             </div>
+            <div className="cal-legend">
+              <span>
+                <i className="dot in" /> 收入
+              </span>
+              <span>
+                <i className="dot out" /> 支出
+              </span>
+              <span>
+                <i className="dot todo" /> 待办
+              </span>
+              <span className="cal-legend-hint">点日期查看当日账单</span>
+            </div>
           </div>
 
-          <div className="card cal-day-panel">
+          <div className="cal-day-head">
             <h3>
-              {selectedDay ? `${month} 月 ${selectedDay} 日` : "选择日期"}
-              {selectedCell && (
-                <span className="muted" style={{ fontWeight: 500, marginLeft: 8 }}>
-                  收 ¥{money(selectedCell.income)} · 支 ¥{money(selectedCell.expense)}
-                </span>
-              )}
+              {selectedDay ? `${month}月${selectedDay}日 · ${weekdayLabel}` : "选择日期"}
             </h3>
+            {selectedCell && (
+              <span className="cal-day-total">
+                {selectedCell.expense > 0
+                  ? `支出 ¥${money(selectedCell.expense)}`
+                  : selectedCell.income > 0
+                    ? `收入 ¥${money(selectedCell.income)}`
+                    : "暂无收支"}
+              </span>
+            )}
+          </div>
+          <div className="card cal-day-panel">
             {dayRows.length === 0 && (
-              <p className="muted">
-                {selectedPerson ? `${selectedPerson.display_name} 这一天还没有个人账本流水。` : "这一天还没有流水。"}
+              <p className="muted empty-cal-day">
+                {selectedPerson
+                  ? `${selectedPerson.display_name} 这一天还没有个人账本流水。`
+                  : "今天还没有账单，去记第一笔吧。"}
               </p>
             )}
             {dayRows.map((t) => (
-              <TxRow
-                key={t.id}
-                t={t}
-                canEdit={canEditTx(me, t)}
-                onEdit={(row) => setEditTx(row)}
-              />
+              <TxRow key={t.id} t={t} canEdit={canEditTx(me, t)} onEdit={(row) => setEditTx(row)} />
             ))}
           </div>
         </>
@@ -1032,21 +1554,23 @@ function CalendarPage({ token, me, show, go }) {
   );
 }
 
-function Home({ token, me, go, show }) {
+function Home({ token, me, go, show, openSettings }) {
   const [dash, setDash] = useState(null);
-  const [accounts, setAccounts] = useState([]);
-  const [q, setQ] = useState("");
+  const [scope, setScope] = useState(() => localStorage.getItem("ln_home_scope") || "life");
   const [editTx, setEditTx] = useState(null);
   const [txMeta, setTxMeta] = useState({ ledgers: [], accounts: [], cats: [] });
 
   function reloadHome() {
     api("/api/v1/dashboard", { token }).then(setDash);
-    api("/api/v1/accounts", { token }).then(setAccounts).catch(() => setAccounts([]));
   }
 
   useEffect(() => {
     reloadHome();
   }, [token]);
+
+  useEffect(() => {
+    localStorage.setItem("ln_home_scope", scope);
+  }, [scope]);
 
   useEffect(() => {
     Promise.all([
@@ -1057,7 +1581,7 @@ function Home({ token, me, go, show }) {
   }, [token]);
 
   async function deleteHomeTx(t) {
-    if (!window.confirm("确定删除这笔流水？删除后无法恢复。")) return;
+    if (!window.confirm(`删除这笔「${t.note || t.category_name} ¥${money(t.amount)}」？`)) return;
     try {
       await api(`/api/v1/transactions/${t.id}`, { token, method: "DELETE" });
       show("流水已删除");
@@ -1070,233 +1594,160 @@ function Home({ token, me, go, show }) {
 
   if (!dash) return <p className="muted">正在打开账本…</p>;
 
+  const isLife = scope === "life";
+  const summary = isLife
+    ? { expense: dash.family.expense, income: dash.family.income, balance: dash.family.balance }
+    : { expense: dash.business.expense, income: dash.business.income, balance: dash.business.profit };
+  const recent = isLife ? dash.recent || [] : dash.recent_business || [];
   const budgetTotal = (dash.budgets || []).reduce((s, b) => s + (b.amount || 0), 0);
   const budgetSpent = (dash.budgets || []).reduce((s, b) => s + (b.spent || 0), 0);
   const budgetLeft = Math.max(0, budgetTotal - budgetSpent);
   const budgetPct = budgetTotal > 0 ? Math.min(100, Math.round((budgetSpent / budgetTotal) * 100)) : 0;
-  const recent = (dash.recent || []).filter((t) => {
-    if (!q.trim()) return true;
-    const hay = `${t.note || ""}${t.category_name || ""}${t.ledger_name || ""}`.toLowerCase();
-    return hay.includes(q.trim().toLowerCase());
-  });
+  const members = dash.members || [];
+  const householdName = me?.household?.name || "我的家庭";
+  const monthLabel = `${dash.period.year}年${dash.period.month}月`;
 
   return (
     <div className="home-page">
-      <label className="search-bar">
-        <span aria-hidden>⌕</span>
-        <input
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          placeholder="搜索账单、类目、备注…"
-        />
-      </label>
-
-      <div className="kv-row">
-        <div className="kv-card">
-          <div className="kl">生活结余</div>
-          <div className="kv">¥ {money(dash.family.balance)}</div>
+      <div className="home-top">
+        <div>
+          <h2>{householdName}</h2>
+          <p className="sub">
+            {householdName} · {isLife ? "生活账" : "经营账"}
+          </p>
         </div>
-        <div className="kv-card">
-          <div className="kl">生活支出</div>
-          <div className="kv down">¥ {money(dash.family.expense)}</div>
-        </div>
+        <button type="button" className="home-switch" onClick={() => go("books")}>
+          切换账本⌄
+        </button>
       </div>
 
-      <section className="today-hero" aria-label="本月生活概况">
-        <div className="lbl">
-          <span className="dot" aria-hidden>
-            ¥
+      <Segmented
+        value={scope}
+        options={[
+          ["life", "生活账"],
+          ["biz", "经营账"],
+        ]}
+        onChange={setScope}
+      />
+
+      <section className="today-hero" aria-label={isLife ? "本月生活概况" : "本月经营概况"} style={{ marginTop: 14 }}>
+        <div className="h-row" style={{ marginBottom: 10 }}>
+          <span className="t" style={{ color: "var(--ink)", fontWeight: 600 }}>
+            {monthLabel} · {isLife ? "生活账" : "经营账"}
           </span>
-          <span>
-            {dash.period.month} 月生活账
-            {budgetTotal > 0 ? ` · 预算已用 ${budgetPct}%` : " · 不含经营"}
-          </span>
+          <span className="hero-sample-pill">示例数据</span>
         </div>
-        <div className="amt">¥ {money(dash.family.balance)}</div>
-        <div className="grid">
-          <div className="g-cell">
-            <span>生活收入</span>
-            <b className="up">¥ {money(dash.family.income)}</b>
+        <div className="lbl" style={{ color: "var(--ink2)" }}>
+          {isLife ? "本月支出" : "本月实付"}
+        </div>
+        <div className="amt">¥ {money(summary.expense)}</div>
+        <div className="h-row" style={{ marginTop: 8, marginBottom: 0 }}>
+          <div>
+            <div className="kl">{isLife ? "本月收入" : "本月实收"}</div>
+            <div style={{ fontWeight: 800, fontSize: "1.05rem" }}>¥ {money(summary.income)}</div>
           </div>
-          <div className="g-cell">
-            <span>生活支出</span>
-            <b className="down">¥ {money(dash.family.expense)}</b>
-          </div>
-          <div className="g-cell">
-            <span>生活结余</span>
-            <b>¥ {money(dash.family.balance)}</b>
+          <div style={{ textAlign: "right" }}>
+            <div className="kl">{isLife ? "本月结余" : "净利润"}</div>
+            <div style={{ fontWeight: 800, fontSize: "1.05rem" }}>¥ {money(summary.balance)}</div>
           </div>
         </div>
       </section>
-
-      <section className="card biz-peek" aria-label="经营账本">
-        <div className="h-row">
-          <span className="t">经营账本</span>
-          <button type="button" className="more" onClick={() => go("biz")}>
-            单独查看
-          </button>
-        </div>
-        <div className="asset-split" style={{ padding: "0 16px 14px" }}>
-          <div>
-            <span>收入</span>
-            <b>¥ {money(dash.business.income)}</b>
-          </div>
-          <div>
-            <span>成本</span>
-            <b>¥ {money(dash.business.expense)}</b>
-          </div>
-          <div>
-            <span>毛利</span>
-            <b>¥ {money(dash.business.profit)}</b>
-          </div>
-        </div>
-        <p className="muted" style={{ padding: "0 16px 14px", margin: 0 }}>
-          不计入上方生活总额
-        </p>
-      </section>
-
-      {budgetTotal > 0 && (
-        <div className="card month-card">
-          <div className="ring" aria-hidden>
-            <svg width="74" height="74" viewBox="0 0 74 74">
-              <circle cx="37" cy="37" r="30" fill="none" stroke="var(--line)" strokeWidth="8" />
-              <circle
-                cx="37"
-                cy="37"
-                r="30"
-                fill="none"
-                stroke="var(--brand-d)"
-                strokeWidth="8"
-                strokeLinecap="round"
-                strokeDasharray={`${(budgetPct / 100) * 188.4} 188.4`}
-                transform="rotate(-90 37 37)"
-              />
-            </svg>
-            <div className="ct">
-              <b>{budgetPct}%</b>
-              预算
-            </div>
-          </div>
-          <div className="month-cols">
-            <div className="m-col">
-              <span>预算总额</span>
-              <b>¥ {money(budgetTotal)}</b>
-            </div>
-            <div className="m-col">
-              <span>已花费</span>
-              <b className="down">¥ {money(budgetSpent)}</b>
-            </div>
-            <div className="m-col">
-              <span>剩余</span>
-              <b className="up">¥ {money(budgetLeft)}</b>
-            </div>
-            <div className="m-col">
-              <span>家庭结余</span>
-              <b>¥ {money(dash.family.balance)}</b>
-            </div>
-          </div>
-        </div>
-      )}
-
-      <div className="card acct-strip">
-        <div className="h-row">
-          <span className="t">我的账户</span>
-          <button type="button" className="more" onClick={() => go("accounts")}>
-            全部
-          </button>
-        </div>
-        {accounts.slice(0, 3).map((a) => (
-          <div className="acct-item" key={a.id}>
-            <div className="acct-ic" style={{ background: "var(--brand-d)" }}>
-              {a.name.slice(0, 1)}
-            </div>
-            <div>
-              <div className="an">{a.name}</div>
-              <div className="as">{accountKindLabel(a.kind)}</div>
-            </div>
-            <div className="abal">
-              <b>¥ {money(a.opening_balance)}</b>
-              <small>期初</small>
-            </div>
-          </div>
-        ))}
-        {accounts.length === 0 && <p className="muted">还没有账户，去「账户」页添加。</p>}
-      </div>
 
       <div className="quick-grid">
         {[
-          ["calendar", "日历", "▦", "var(--brand)"],
-          ["accounts", "账户", "▣", "var(--teal)"],
-          ["books", "账本", "☰", "var(--amber)"],
-          ["budget", "预算", "◎", "var(--blue)"],
-        ].map(([id, label, icon, bg]) => (
-          <button key={id} type="button" className="quick-cell" onClick={() => go(id)}>
-            <span className="qi" style={{ background: bg }}>
-              {icon}
+          ["calendar", "日历查账", "calendar-days"],
+          ["budget", "预算管理", "chart"],
+          ["accounts", "账户资产", "wallet"],
+          ["family", "家庭成员", "users"],
+        ].map(([id, label, icon]) => (
+          <button
+            key={id}
+            type="button"
+            className="quick-cell"
+            onClick={() => (id === "family" ? openSettings("members") : go(id))}
+          >
+            <span className="qi">
+              <Icon name={icon} size={20} />
             </span>
             <span>{label}</span>
           </button>
         ))}
       </div>
 
-      <div className="card">
-        <div className="h-row" style={{ padding: "14px 16px 0" }}>
-          <span className="t">最近生活账单</span>
-          <button type="button" className="more" onClick={() => go("books")}>
-            更多
-          </button>
+      {isLife && (
+        <div className="budget-card">
+          <div className="h-row">
+            <span className="t" style={{ color: "var(--ink)" }}>
+              本月预算
+            </span>
+            <button type="button" className="more" onClick={() => go("budget")}>
+              查看预算 ›
+            </button>
+          </div>
+          {budgetTotal > 0 ? (
+            <>
+              <div className="h-row" style={{ marginBottom: 0 }}>
+                <span className="muted" style={{ fontSize: "0.75rem" }}>
+                  已用 ¥{money(budgetSpent)} / ¥{money(budgetTotal)}
+                </span>
+                <span style={{ color: "var(--brand-mid)", fontSize: "0.75rem" }}>{budgetPct}%</span>
+              </div>
+              <div className="prog" aria-hidden>
+                <i style={{ width: `${budgetPct}%` }} />
+              </div>
+              <p className="hint">还可支出 ¥{money(budgetLeft)}，给生活留一点余地。</p>
+            </>
+          ) : (
+            <p className="hint">还没有设置预算，去定一条提醒线吧。</p>
+          )}
         </div>
-        <div className="list" style={{ paddingBottom: 8 }}>
-          {recent.map((t) => (
-            <TxRow
-              key={t.id}
-              t={t}
-              canEdit={canEditTx(me, t)}
-              onEdit={(row) => setEditTx(row)}
-            />
-          ))}
-          {recent.length === 0 && <div className="empty-state" style={{ margin: 12 }}>暂无匹配账单</div>}
-        </div>
-      </div>
+      )}
 
-      <div className="row two" style={{ marginTop: 4 }}>
-        <div className="card">
-          <h3>近半年生活收支</h3>
-          <p className="muted" style={{ marginTop: 0, padding: "0 16px" }}>
-            仅生活账，不含经营
-          </p>
-          <div className="chart-box">
-            <ResponsiveContainer>
-              <AreaChart data={dash.trend}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(70,55,110,0.08)" />
-                <XAxis dataKey="label" />
-                <YAxis />
-                <Tooltip />
-                <Area type="monotone" dataKey="income" stroke="#8F6FD6" fill="#E8D9FA" name="收入" />
-                <Area type="monotone" dataKey="expense" stroke="#E07070" fill="#FFD6D6" name="支出" />
-              </AreaChart>
-            </ResponsiveContainer>
+      {!isLife && (
+        <div className="budget-card">
+          <div className="h-row">
+            <span className="t" style={{ color: "var(--ink)" }}>
+              经营概览
+            </span>
+            <button type="button" className="more" onClick={() => go("biz")}>
+              经营详情 ›
+            </button>
           </div>
+          <p className="hint">经营账与生活账分开统计，互不影响家庭结余。</p>
         </div>
-        <div className="card">
-          <h3>生活支出构成</h3>
-          <p className="muted" style={{ marginTop: 0, padding: "0 16px" }}>
-            经营成本不进饼图
-          </p>
-          <div className="chart-box">
-            <ResponsiveContainer>
-              <PieChart>
-                <Pie data={dash.by_category} dataKey="value" nameKey="name" innerRadius={48} outerRadius={80}>
-                  {dash.by_category.map((c) => (
-                    <Cell key={c.name} fill={c.color} />
-                  ))}
-                </Pie>
-                <Tooltip />
-              </PieChart>
-            </ResponsiveContainer>
+      )}
+
+      {members.length > 0 && (
+        <div className="home-family-row">
+          <div className="avatars">
+            {members.slice(0, 4).map((m) => (
+              <UserAvatar key={m.user_id || m.display_name} user={m} size={26} />
+            ))}
+            <span>{members.length}位家人共同记账</span>
           </div>
+          <span className="home-sync" title="已同步">
+            <Icon name="cloud-check" size={17} />
+          </span>
         </div>
+      )}
+
+      <div className="h-row" style={{ marginTop: 4 }}>
+        <span className="t" style={{ color: "var(--ink)", fontSize: "1rem" }}>
+          近期账单
+        </span>
+        <button type="button" className="more" onClick={() => go("bills")}>
+          全部账单 ›
+        </button>
       </div>
+      {recent.length === 0 ? (
+        <div className="empty-state" style={{ margin: "8px 0 14px" }}>
+          这里还是空白，记下生活的第一笔吧。
+        </div>
+      ) : (
+        <div style={{ marginBottom: 14 }}>
+          <TxDayGroups rows={recent.slice(0, 8)} me={me} onEdit={(row) => setEditTx(row)} />
+        </div>
+      )}
 
       {editTx && (
         <TxEditModal
@@ -1316,7 +1767,405 @@ function Home({ token, me, go, show }) {
   );
 }
 
-function AccountsHome({ token, me, show, openSettings }) {
+function BillsPage({ token, me, show, go }) {
+  const [scope, setScope] = useState("all");
+  const [q, setQ] = useState("");
+
+  return (
+    <div className="bills-page">
+      <div className="page-head compact">
+        <div>
+          <h2 className="hello">账单</h2>
+          <p className="sub">按日期查看流水，点一笔看详情。</p>
+        </div>
+        <button type="button" className="text-link" onClick={() => go("calendar")}>
+          日历查账
+        </button>
+      </div>
+      <Segmented
+        value={scope}
+        options={[
+          ["all", "全部"],
+          ["life", "生活账"],
+          ["biz", "经营账"],
+        ]}
+        onChange={setScope}
+      />
+      <label className="search-bar" style={{ marginTop: 12 }}>
+        <span aria-hidden>⌕</span>
+        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="搜索备注、类目…" />
+      </label>
+      <div className="list" style={{ marginTop: 12 }}>
+        <BillsList token={token} me={me} show={show} scope={scope} filterText={q} />
+      </div>
+    </div>
+  );
+}
+
+function BillsList({ token, me, show, scope, filterText }) {
+  const [rows, setRows] = useState([]);
+  const [ledgers, setLedgers] = useState([]);
+  const [accounts, setAccounts] = useState([]);
+  const [cats, setCats] = useState([]);
+  const [editTx, setEditTx] = useState(null);
+
+  function loadRows() {
+    const path =
+      scope === "biz"
+        ? "/api/v1/transactions?limit=80&ledger_type=business"
+        : "/api/v1/transactions?limit=80";
+    return api(path, { token }).then(setRows);
+  }
+
+  useEffect(() => {
+    loadRows();
+  }, [token, scope]);
+
+  useEffect(() => {
+    Promise.all([
+      api("/api/v1/ledgers", { token }),
+      api("/api/v1/accounts", { token }),
+      api("/api/v1/categories", { token }),
+    ]).then(([l, a, c]) => {
+      setLedgers(l);
+      setAccounts(a);
+      setCats(c);
+    });
+  }, [token]);
+
+  async function deleteTx(t) {
+    if (!window.confirm(`删除这笔「${t.note || t.category_name} ¥${money(t.amount)}」？`)) return;
+    try {
+      await api(`/api/v1/transactions/${t.id}`, { token, method: "DELETE" });
+      show("流水已删除");
+      setEditTx(null);
+      loadRows();
+    } catch (err) {
+      show(err.message);
+    }
+  }
+
+  const filtered = rows.filter((t) => {
+    if (scope === "life" && t.ledger_type === "business") return false;
+    if (!filterText?.trim()) return true;
+    const hay = `${t.note || ""}${t.category_name || ""}${t.ledger_name || ""}${t.user_name || ""}`.toLowerCase();
+    return hay.includes(filterText.trim().toLowerCase());
+  });
+
+  return (
+    <>
+      {filtered.length === 0 ? (
+        <div className="empty-state">今天还没有账单，去记第一笔吧。</div>
+      ) : (
+        <TxDayGroups rows={filtered} me={me} onEdit={(row) => setEditTx(row)} />
+      )}
+      {editTx && (
+        <TxEditModal
+          tx={editTx}
+          token={token}
+          me={me}
+          ledgers={ledgers}
+          accounts={accounts}
+          cats={cats}
+          show={show}
+          onClose={() => setEditTx(null)}
+          onSaved={() => loadRows()}
+          onDelete={deleteTx}
+        />
+      )}
+    </>
+  );
+}
+
+function StatsPage({ token, me, go, show }) {
+  const now = new Date();
+  const [dash, setDash] = useState(null);
+  const [monthCal, setMonthCal] = useState(null);
+  const [book, setBook] = useState("life"); // life | biz
+  const [kind, setKind] = useState("expense"); // expense | income
+  const [range, setRange] = useState("month"); // month | year
+  const year = dash?.period?.year || now.getFullYear();
+  const month = dash?.period?.month || now.getMonth() + 1;
+
+  useEffect(() => {
+    api("/api/v1/dashboard", { token })
+      .then(setDash)
+      .catch((e) => show(e.message));
+  }, [token, show]);
+
+  useEffect(() => {
+    if (!dash) return;
+    const scope = book === "biz" ? "business" : "family";
+    api(`/api/v1/calendar/month?year=${year}&month=${month}&scope=${scope}`, { token })
+      .then(setMonthCal)
+      .catch(() => setMonthCal(null));
+  }, [token, dash, book, year, month]);
+
+  if (!dash) return <p className="muted">正在汇总统计…</p>;
+
+  const isLife = book === "life";
+  const isExpense = kind === "expense";
+  const total = isLife
+    ? isExpense
+      ? dash.family.expense
+      : dash.family.income
+    : isExpense
+      ? dash.business.expense
+      : dash.business.income;
+
+  const catsRaw = isExpense ? dash.by_category || [] : [];
+  const catTotal = catsRaw.reduce((s, c) => s + (c.value || 0), 0) || 1;
+  const cats = catsRaw.map((c, i) => ({
+    ...c,
+    color: c.color || STAT_COLORS[i % STAT_COLORS.length],
+    pct: ((c.value || 0) / catTotal) * 100,
+  }));
+
+  const dayMap = Object.fromEntries((monthCal?.days || []).map((d) => [Number(d.date.slice(-2)), d]));
+  const dim = daysInMonth(year, month);
+  const todayCap =
+    year === now.getFullYear() && month === now.getMonth() + 1 ? now.getDate() : dim;
+  const dailyBars = [];
+  let maxDay = { day: 1, expense: 0 };
+  let sumDays = 0;
+  for (let d = 1; d <= todayCap; d++) {
+    const exp = dayMap[d]?.expense || 0;
+    dailyBars.push({ day: d, expense: exp, label: String(d) });
+    sumDays += exp;
+    if (exp >= maxDay.expense) maxDay = { day: d, expense: exp };
+  }
+  const avgDay = todayCap > 0 ? sumDays / todayCap : 0;
+
+  const members = (dash.members || [])
+    .map((m) => ({
+      name: m.display_name,
+      value: isExpense ? m.expense || 0 : m.income || 0,
+    }))
+    .sort((a, b) => b.value - a.value);
+  const memberMax = Math.max(...members.map((m) => m.value), 1);
+
+  return (
+    <div className="stats-page">
+      <div className="stats-head">
+        <div className="stats-head-row">
+          <h2>统计分析</h2>
+          <button type="button" className="text-link" onClick={() => go("books")}>
+            切换账本⌄
+          </button>
+        </div>
+        <p className="stats-sub">
+          {me?.household?.name || "家庭"} · {isLife ? "生活账" : "经营账"}
+        </p>
+      </div>
+
+      <div className="stats-range-row">
+        <button type="button" className="stats-month-btn">
+          {year}年{month}月 ⌄
+        </button>
+        <div className="stats-range-tabs">
+          {[
+            ["month", "月度"],
+            ["year", "年度"],
+            ["custom", "自定义"],
+          ].map(([id, label]) => (
+            <button
+              key={id}
+              type="button"
+              className={range === id ? "on" : ""}
+              onClick={() => {
+                if (id === "custom") {
+                  show("自定义区间即将支持");
+                  return;
+                }
+                setRange(id);
+                if (id === "year") show("年度视图：当前展示本月明细，年汇总可看下方趋势");
+              }}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <Segmented
+        value={kind}
+        options={[
+          ["expense", "支出分析"],
+          ["income", "收入分析"],
+        ]}
+        onChange={setKind}
+      />
+
+      <div className="stats-book-switch">
+        <FilterChip active={book === "life"} onClick={() => setBook("life")}>
+          生活账
+        </FilterChip>
+        <FilterChip active={book === "biz"} onClick={() => setBook("biz")}>
+          经营账
+        </FilterChip>
+      </div>
+
+      <section className="card stats-donut-card">
+        <div className="stats-donut-top">
+          <div>
+            <p className="kl">{isExpense ? "本月累计支出" : "本月累计收入"}</p>
+            <p className="stats-big-amt">¥{money(total)}</p>
+          </div>
+          <span className="stats-pill">截至{todayCap}日</span>
+        </div>
+
+        {isExpense && isLife && cats.length > 0 ? (
+          <div className="stats-donut-body">
+            <div className="stats-donut-chart">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={cats}
+                    dataKey="value"
+                    nameKey="name"
+                    innerRadius={38}
+                    outerRadius={58}
+                    paddingAngle={1}
+                    stroke="none"
+                  >
+                    {cats.map((c) => (
+                      <Cell key={c.name} fill={c.color} />
+                    ))}
+                  </Pie>
+                </PieChart>
+              </ResponsiveContainer>
+              <div className="stats-donut-center">
+                <strong>{cats.length}</strong>
+                <span>{isExpense ? "支出分类" : "收入分类"}</span>
+              </div>
+            </div>
+            <div className="stats-legend">
+              {cats.slice(0, 6).map((c) => (
+                <div className="stats-legend-row" key={c.name}>
+                  <span className="stats-legend-name">
+                    <i style={{ background: c.color }} />
+                    {c.name}
+                  </span>
+                  <span className="stats-legend-val">
+                    {c.pct.toFixed(1)}% · ¥{money(c.value)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <p className="muted" style={{ margin: "8px 0 0" }}>
+            {isExpense
+              ? isLife
+                ? "本月还没有支出分类数据。"
+                : `经营实付 ¥${money(dash.business.expense)}，毛利 ¥${money(dash.business.profit)}。`
+              : `本月${isLife ? "生活" : "经营"}收入 ¥${money(total)}。`}
+          </p>
+        )}
+      </section>
+
+      {isExpense && (
+        <section className="card stats-trend-card">
+          <div className="h-row">
+            <span className="stats-card-title">每日支出趋势</span>
+            <span className="text-link" style={{ cursor: "default" }}>
+              1–{todayCap}日
+            </span>
+          </div>
+          <div className="stats-bar-wrap">
+            <ResponsiveContainer width="100%" height={90}>
+              <BarChart data={dailyBars} margin={{ top: 4, right: 0, left: 0, bottom: 0 }}>
+                <XAxis
+                  dataKey="day"
+                  tick={{ fontSize: 9, fill: "#aba8ba" }}
+                  axisLine={false}
+                  tickLine={false}
+                  interval="preserveStartEnd"
+                  ticks={[1, 5, 9, todayCap].filter((d, i, a) => a.indexOf(d) === i && d <= todayCap)}
+                />
+                <Tooltip formatter={(v) => [`¥${money(v)}`, "支出"]} />
+                <Bar dataKey="expense" radius={[3, 3, 0, 0]} maxBarSize={14}>
+                  {dailyBars.map((d) => (
+                    <Cell
+                      key={d.day}
+                      fill={d.day === todayCap ? "#8270d8" : "#cbc2ef"}
+                    />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+          <div className="stats-trend-foot">
+            <span>日均 ¥{money(avgDay)}</span>
+            <span>
+              最高 {maxDay.day}日 · ¥{money(maxDay.expense)}
+            </span>
+          </div>
+        </section>
+      )}
+
+      {isLife && (
+        <>
+          <div className="h-row stats-section-title">
+            <span className="stats-card-title">家庭成员消费</span>
+            <span className="text-link" style={{ cursor: "default" }}>
+              仅生活账
+            </span>
+          </div>
+          <section className="card stats-member-card">
+            {members.length === 0 && <p className="muted">暂无成员消费数据</p>}
+            {members.map((m) => (
+              <div className="stats-member-row" key={m.name}>
+                <span className="stats-member-name">{m.name}</span>
+                <div className="stats-member-track">
+                  <i style={{ width: `${Math.max(4, (m.value / memberMax) * 100)}%` }} />
+                </div>
+                <span className="stats-member-amt">¥{money(m.value)}</span>
+              </div>
+            ))}
+          </section>
+        </>
+      )}
+
+      {!isLife && (
+        <section className="card" style={{ padding: 18 }}>
+          <h3 className="stats-card-title" style={{ marginTop: 0 }}>
+            经营概览
+          </h3>
+          <p className="muted">
+            实收 ¥{money(dash.business.income)} · 实付 ¥{money(dash.business.expense)} · 净利润 ¥
+            {money(dash.business.profit)}
+          </p>
+          <button type="button" className="btn" style={{ marginTop: 8 }} onClick={() => go("biz")}>
+            打开经营副业
+          </button>
+        </section>
+      )}
+
+      {range === "year" && isLife && (
+        <section className="card" style={{ padding: 18, marginTop: 14 }}>
+          <h3 className="stats-card-title" style={{ marginTop: 0 }}>
+            近半年收支
+          </h3>
+          <div className="chart-box" style={{ height: 180 }}>
+            <ResponsiveContainer>
+              <AreaChart data={dash.trend}>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(70,55,110,0.08)" />
+                <XAxis dataKey="label" tick={{ fontSize: 11 }} />
+                <YAxis tick={{ fontSize: 11 }} width={36} />
+                <Tooltip />
+                <Area type="monotone" dataKey="income" stroke="#8270d8" fill="#f0ecfc" name="收入" />
+                <Area type="monotone" dataKey="expense" stroke="#d5879f" fill="#fce8ef" name="支出" />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </section>
+      )}
+    </div>
+  );
+}
+
+function AccountsHome({ token, me, show, go, openSettings }) {
   const [wallets, setWallets] = useState([]);
   const [dash, setDash] = useState(null);
 
@@ -1336,12 +2185,17 @@ function AccountsHome({ token, me, show, openSettings }) {
     <div className="accounts-home">
       <div className="page-head">
         <div>
-          <h2 className="hello">我的账户</h2>
+          <h2 className="hello">账户资产</h2>
           <p className="sub">{me?.user.display_name} · 生活与经营账户分开统计</p>
         </div>
-        <button type="button" className="btn" onClick={() => openSettings("wallets")}>
-          管理
-        </button>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <button type="button" className="text-link" onClick={() => go("home")}>
+            ← 首页
+          </button>
+          <button type="button" className="btn" onClick={() => openSettings("wallets")}>
+            管理
+          </button>
+        </div>
       </div>
 
       <div className="asset-hero">
@@ -1388,14 +2242,15 @@ function AccountsHome({ token, me, show, openSettings }) {
 }
 
 function TxRow({ t, canEdit, onEdit }) {
+  const metaParts = [categoryLabel(t.category_name), t.user_name, t.account_name || t.ledger_name].filter(Boolean);
   return (
     <div
-      className={`tx ${canEdit ? "editable" : ""}`}
-      onClick={canEdit ? () => onEdit(t) : undefined}
-      role={canEdit ? "button" : undefined}
-      tabIndex={canEdit ? 0 : undefined}
+      className={`tx ${canEdit || onEdit ? "editable" : ""}`}
+      onClick={onEdit ? () => onEdit(t) : undefined}
+      role={onEdit ? "button" : undefined}
+      tabIndex={onEdit ? 0 : undefined}
       onKeyDown={
-        canEdit
+        onEdit
           ? (e) => {
               if (e.key === "Enter" || e.key === " ") {
                 e.preventDefault();
@@ -1405,21 +2260,39 @@ function TxRow({ t, canEdit, onEdit }) {
           : undefined
       }
     >
-      <div className="icon-bubble" style={{ background: t.category_color + "33" }}>
-        {t.category_icon}
+      <div className="icon-bubble">
+        <CategoryIcon name={t.category_name} emoji={t.category_icon} size={20} />
       </div>
       <div className="tx-body">
-        <div className="tx-title">
-          {t.note || t.category_name} · {t.user_name}
-        </div>
-        <div className="muted tx-meta">
-          {t.ledger_name} · {t.occurred_at.slice(0, 10)} · {t.source === "ai_wechat" ? "微信入账" : "手工"}
-          {canEdit && <span className="tx-edit-hint"> · 点击编辑</span>}
-        </div>
+        <div className="tx-title">{t.note || categoryLabel(t.category_name)}</div>
+        <div className="muted tx-meta">{metaParts.join(" · ")}</div>
       </div>
       <div className={`amount ${t.type}`}>
-        {t.type === "expense" ? "-" : "+"}¥ {money(t.amount)}
+        {t.type === "expense" ? "−" : "+"}
+        {money(t.amount)}
       </div>
+    </div>
+  );
+}
+
+function TxDayGroups({ rows, me, onEdit }) {
+  const groups = groupTxByDay(rows);
+  if (groups.length === 0) return null;
+  return (
+    <div className="tx-day-groups">
+      {groups.map(([day, list]) => (
+        <section key={day} className="tx-day-card">
+          <div className="tx-day-head">
+            <span>{formatDayHeading(day)}</span>
+            <span className="tx-day-sum">支出 ¥{money(dayExpenseTotal(list))}</span>
+          </div>
+          <div className="list">
+            {list.map((t) => (
+              <TxRow key={t.id} t={t} canEdit={canEditTx(me, t)} onEdit={onEdit} />
+            ))}
+          </div>
+        </section>
+      ))}
     </div>
   );
 }
@@ -1438,15 +2311,18 @@ function txFormFromRow(t) {
 }
 
 function TxEditModal({ tx, token, me, ledgers, accounts, cats, onClose, onSaved, onDelete, show }) {
+  const [editing, setEditing] = useState(false);
   const [form, setForm] = useState(() => txFormFromRow(tx));
   const ledger = ledgers.find((l) => String(l.id) === String(form.ledger_id));
   const filteredCats = cats.filter(
     (c) => c.kind === form.type && (!ledger || c.ledger_type === ledger.type)
   );
+  const canEdit = canEditTx(me, tx);
   useBodyScrollLock(true);
 
   useEffect(() => {
     setForm(txFormFromRow(tx));
+    setEditing(false);
   }, [tx]);
 
   async function save(e) {
@@ -1474,30 +2350,90 @@ function TxEditModal({ tx, token, me, ledgers, accounts, cats, onClose, onSaved,
     }
   }
 
-  return (
-    <div className="modal-backdrop" onClick={onClose}>
-      <form className="card modal tx-modal" onSubmit={save} onClick={(e) => e.stopPropagation()}>
-        <h3>编辑流水</h3>
-        <p className="muted" style={{ marginBottom: 12 }}>
-          {tx.user_name} 记的 · {tx.source === "ai_wechat" ? "微信入账" : "手工"}
-        </p>
-        <div className="chips" style={{ marginBottom: 12 }}>
-          <button
-            type="button"
-            className={`chip ${form.type === "expense" ? "on" : ""}`}
-            onClick={() => setForm({ ...form, type: "expense", category_id: "" })}
-          >
-            支出
+  if (!editing) {
+    return (
+      <div className="add-page tx-detail-page">
+        <header className="add-page-head">
+          <button type="button" className="add-back" onClick={onClose} aria-label="返回">
+            <Icon name="chevron-left" size={22} />
           </button>
-          <button
-            type="button"
-            className={`chip ${form.type === "income" ? "on" : ""}`}
-            onClick={() => setForm({ ...form, type: "income", category_id: "" })}
-          >
-            收入
-          </button>
+          <div className="add-page-titles">
+            <div className="add-page-title-row">
+              <h2>账单详情</h2>
+              {canEdit && (
+                <button type="button" className="text-link" onClick={() => setEditing(true)}>
+                  编辑
+                </button>
+              )}
+            </div>
+            <p className="add-page-sub">
+              {tx.ledger_name} · {tx.source === "ai_wechat" ? "微信入账" : "手工记账"}
+            </p>
+          </div>
+        </header>
+        <div className="tx-detail-hero">
+          <span className="tx-detail-icon">
+            <CategoryIcon name={tx.category_name} emoji={tx.category_icon} size={28} />
+          </span>
+          <p className="tx-detail-note">{tx.note || categoryLabel(tx.category_name)}</p>
+          <p className={`tx-detail-amt ${tx.type}`}>
+            {tx.type === "expense" ? "−" : "+"}¥{money(tx.amount)}
+          </p>
         </div>
-        <label>
+        <div className="add-info-card">
+          <div className="add-field-row static">
+            <span>分类</span>
+            <strong>{categoryLabel(tx.category_name)}</strong>
+          </div>
+          <div className="add-field-row static">
+            <span>账户</span>
+            <strong>{tx.account_name}</strong>
+          </div>
+          <div className="add-field-row static">
+            <span>账本</span>
+            <strong>{tx.ledger_name}</strong>
+          </div>
+          <div className="add-field-row static">
+            <span>成员</span>
+            <strong>{tx.user_name}</strong>
+          </div>
+          <div className="add-field-row static">
+            <span>时间</span>
+            <strong>{formatCnDate(tx.occurred_at)}</strong>
+          </div>
+        </div>
+        {canEdit && (
+          <div className="add-page-foot">
+            <button type="button" className="btn ghost danger" onClick={() => onDelete(tx)}>
+              删除这笔账单
+            </button>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="add-page tx-detail-page">
+      <header className="add-page-head">
+        <button type="button" className="add-back" onClick={() => setEditing(false)} aria-label="返回">
+          <Icon name="chevron-left" size={22} />
+        </button>
+        <div>
+          <h2>编辑账单</h2>
+          <p className="add-page-sub">{tx.user_name} 记的</p>
+        </div>
+      </header>
+      <form className="add-page-body" onSubmit={save}>
+        <Segmented
+          value={form.type}
+          options={[
+            ["expense", "支出"],
+            ["income", "收入"],
+          ]}
+          onChange={(type) => setForm({ ...form, type, category_id: "" })}
+        />
+        <label className="amount-field">
           金额
           <input
             type="text"
@@ -1534,35 +2470,35 @@ function TxEditModal({ tx, token, me, ledgers, accounts, cats, onClose, onSaved,
             ))}
           </select>
         </label>
-        <div style={{ marginTop: 8 }}>
+        <div className="cat-block">
           <span className="cat-label">分类</span>
-          <div className="chips">
+          <div className="cat-grid">
             {filteredCats.map((c) => (
               <button
                 type="button"
                 key={c.id}
-                className={`chip ${String(form.category_id) === String(c.id) ? "on" : ""}`}
+                className={`cat-tile ${String(form.category_id) === String(c.id) ? "on" : ""}`}
                 onClick={() => setForm({ ...form, category_id: c.id })}
               >
-                {c.icon} {c.name}
+                <span className="cat-tile-icon">
+                  <CategoryIcon name={c.name} emoji={c.icon} size={22} />
+                </span>
+                <span className="cat-tile-label">{categoryLabel(c.name)}</span>
               </button>
             ))}
           </div>
         </div>
-        <label style={{ marginTop: 12 }}>
+        <label>
           备注
           <input value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} />
         </label>
-        <div className="modal-actions">
-          {canEditTx(me, tx) && (
-            <button type="button" className="btn ghost" onClick={() => onDelete(tx)}>
-              删除
-            </button>
-          )}
-          <button type="button" className="btn ghost" onClick={onClose}>
+        <div className="add-page-foot dual" style={{ marginTop: 16 }}>
+          <button type="button" className="btn secondary" onClick={() => setEditing(false)}>
             取消
           </button>
-          <button className="btn">保存</button>
+          <button className="btn" type="submit">
+            保存修改
+          </button>
         </div>
       </form>
     </div>
@@ -1622,15 +2558,11 @@ function TransactionList({ token, me, show, query, emptyText = "还没有流水�
 
   return (
     <>
-      {rows.map((t) => (
-        <TxRow
-          key={t.id}
-          t={t}
-          canEdit={canEditTx(me, t)}
-          onEdit={(row) => setEditTx(row)}
-        />
-      ))}
-      {rows.length === 0 && <div className="empty-state">{emptyText}</div>}
+      {rows.length === 0 ? (
+        <div className="empty-state">{emptyText}</div>
+      ) : (
+        <TxDayGroups rows={rows} me={me} onEdit={(row) => setEditTx(row)} />
+      )}
       {editTx && (
         <TxEditModal
           tx={editTx}
@@ -1705,18 +2637,88 @@ function Books({ token, me, show }) {
   );
 }
 
-function AddSheet({ token, show, onClose }) {
-  const [ledgers, setLedgers] = useState([]);
-  const [accounts, setAccounts] = useState([]);
-  const [cats, setCats] = useState([]);
-  const [form, setForm] = useState({
+function todayIso() {
+  const n = new Date();
+  return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}-${String(n.getDate()).padStart(2, "0")}`;
+}
+
+function emptyAddForm(partial = {}) {
+  return {
     type: "expense",
     amount: "",
     note: "",
     ledger_id: "",
     account_id: "",
+    to_account_id: "",
     category_id: "",
-  });
+    date: todayIso(),
+    ...partial,
+  };
+}
+
+function AddSuccess({ me, saved, onAgain, onBills, onHome }) {
+  const isBiz = saved?.ledger_type === "business";
+  return (
+    <div className="add-page add-success-page">
+      <header className="add-page-head">
+        <button type="button" className="add-back" onClick={onHome} aria-label="返回">
+          <Icon name="chevron-left" size={22} />
+        </button>
+        <div>
+          <h2>记账完成</h2>
+          <p className="add-page-sub">{me?.household?.name || "家庭"} · 已同步</p>
+        </div>
+      </header>
+      <div className="add-success-hero">
+        <span className="add-success-check">
+          <Icon name="circle-check" size={48} />
+        </span>
+        <h3>保存成功</h3>
+        <p>这笔账已记入家庭账本</p>
+        <span className="add-success-pill">{isBiz ? "经营账" : "生活账"}</span>
+      </div>
+      <div className="add-info-card add-success-card">
+        <div className="add-success-card-top">
+          <span>{saved?.note || categoryLabel(saved?.category_name) || "账单"}</span>
+          <span className={`add-type-tag ${saved?.type}`}>{saved?.type === "income" ? "收入" : "支出"}</span>
+        </div>
+        <div className={`add-success-amt ${saved?.type}`}>
+          {saved?.type === "expense" ? "−" : "+"}¥{money(saved?.amount)}
+        </div>
+        <div className="add-field-row static">
+          <span>分类</span>
+          <strong>{categoryLabel(saved?.category_name)}</strong>
+        </div>
+        <div className="add-field-row static">
+          <span>账户</span>
+          <strong>{saved?.account_name}</strong>
+        </div>
+        <div className="add-field-row static">
+          <span>记账时间</span>
+          <strong>{formatCnDate(saved?.occurred_at)}</strong>
+        </div>
+      </div>
+      <div className="add-page-foot dual">
+        <button type="button" className="btn secondary" onClick={onAgain}>
+          再记一笔
+        </button>
+        <button type="button" className="btn" onClick={onBills}>
+          查看账单
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function AddSheet({ token, me, show, onClose, onGoBills }) {
+  const [ledgers, setLedgers] = useState([]);
+  const [accounts, setAccounts] = useState([]);
+  const [cats, setCats] = useState([]);
+  const [form, setForm] = useState(() => emptyAddForm());
+  const [picker, setPicker] = useState(""); // account | date | ledger | note | transferTo
+  const [moreCats, setMoreCats] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(null);
   useBodyScrollLock(true);
 
   useEffect(() => {
@@ -1728,141 +2730,380 @@ function AddSheet({ token, show, onClose }) {
       setLedgers(l);
       setAccounts(a);
       setCats(c);
-      setForm((f) => ({
-        ...f,
-        ledger_id: l[0]?.id || "",
-        account_id: a[0]?.id || "",
-      }));
+      let draft = null;
+      try {
+        draft = JSON.parse(localStorage.getItem(DRAFT_KEY) || "null");
+      } catch {
+        draft = null;
+      }
+      setForm((f) =>
+        emptyAddForm({
+          ...f,
+          ...(draft || {}),
+          ledger_id: draft?.ledger_id || l.find((x) => x.type !== "business")?.id || l[0]?.id || "",
+          account_id: draft?.account_id || a[0]?.id || "",
+          to_account_id: draft?.to_account_id || a[1]?.id || a[0]?.id || "",
+          date: draft?.date || todayIso(),
+        })
+      );
     });
   }, [token]);
 
   const ledger = ledgers.find((l) => String(l.id) === String(form.ledger_id));
+  const isBiz = ledger?.type === "business";
+  const isTransfer = form.type === "transfer";
   const filteredCats = cats.filter(
-    (c) => c.kind === form.type && (!ledger || c.ledger_type === ledger.type)
+    (c) => c.kind === (form.type === "income" ? "income" : "expense") && (!ledger || c.ledger_type === ledger.type)
   );
+  const primaryNames = isBiz
+    ? ["项目款", "带货/销售", "进货成本", "平台扣点", "工具订阅", "其他成本", "其他经营收入"]
+    : form.type === "income"
+      ? ["工资", "奖金", "报销", "其他收入"]
+      : ["餐饮", "日用", "交通", "居住", "娱乐", "医疗", "教育"];
+  const primaryCats = primaryNames.map((n) => filteredCats.find((c) => c.name === n)).filter(Boolean);
+  const extraCats = filteredCats.filter((c) => !primaryCats.some((p) => p.id === c.id));
+  const visibleCats = moreCats ? [...primaryCats, ...extraCats] : primaryCats;
+  const selectedCat =
+    filteredCats.find((c) => String(c.id) === String(form.category_id)) || visibleCats[0] || filteredCats[0];
+  const account = accounts.find((a) => String(a.id) === String(form.account_id));
+  const toAccount = accounts.find((a) => String(a.id) === String(form.to_account_id));
+  const amountLabel =
+    form.type === "income" ? "收入金额（元）" : form.type === "transfer" ? "转账金额（元）" : "支出金额（元）";
+  const typeLabel = form.type === "income" ? "收入" : form.type === "transfer" ? "转账" : "支出";
+  const draftHint = `${me?.household?.name || "家庭"} · ${isBiz ? "经营账" : "生活账"} · ${typeLabel}草稿`;
 
-  async function submit(e) {
-    e.preventDefault();
+  function tapKey(key) {
+    setForm((f) => {
+      let amt = f.amount || "";
+      if (key === "back") {
+        amt = amt.slice(0, -1);
+      } else if (key === ".") {
+        if (!amt.includes(".")) amt = amt ? `${amt}.` : "0.";
+      } else {
+        if (amt.includes(".") && amt.split(".")[1]?.length >= 2) return f;
+        if (amt === "0") amt = key;
+        else amt = `${amt}${key}`;
+      }
+      return { ...f, amount: amt };
+    });
+  }
+
+  function saveDraft() {
+    localStorage.setItem(DRAFT_KEY, JSON.stringify(form));
+    show("草稿已保存（尚未计入收支）");
+  }
+
+  function resetFormKeepMeta() {
+    setForm((f) =>
+      emptyAddForm({
+        ledger_id: f.ledger_id,
+        account_id: f.account_id,
+        to_account_id: f.to_account_id,
+        type: f.type === "transfer" ? "expense" : f.type,
+      })
+    );
+    setSaved(null);
+    setMoreCats(false);
+    setPicker("");
+  }
+
+  async function submit(keepGoing) {
+    if (isTransfer) {
+      show("转账将记为两笔流水，请确认转出与转入账户不同");
+      if (!form.account_id || !form.to_account_id || String(form.account_id) === String(form.to_account_id)) {
+        show("请选择不同的转出与转入账户");
+        return;
+      }
+    }
+    const amt = Number(form.amount);
+    if (!(amt > 0)) {
+      show("请输入大于 0 的金额");
+      return;
+    }
+    if (!isTransfer && !selectedCat) {
+      show("请选择分类");
+      return;
+    }
+    setSaving(true);
     try {
-      await api("/api/v1/transactions", {
-        token,
-        method: "POST",
-        body: {
-          ...form,
-          ledger_id: Number(form.ledger_id),
-          account_id: Number(form.account_id),
-          category_id: Number(form.category_id || filteredCats[0]?.id),
-          amount: Number(form.amount),
-        },
-      });
-      show("窝窝记下了 ✓");
-      onClose();
+      if (isTransfer) {
+        const transferCat =
+          cats.find((c) => c.name.includes("其他") && c.kind === "expense") ||
+          cats.find((c) => c.kind === "expense");
+        const incomeCat =
+          cats.find((c) => c.name.includes("其他") && c.kind === "income") ||
+          cats.find((c) => c.kind === "income");
+        await api("/api/v1/transactions", {
+          token,
+          method: "POST",
+          body: {
+            type: "expense",
+            amount: amt,
+            note: form.note || "账户转出",
+            ledger_id: Number(form.ledger_id),
+            account_id: Number(form.account_id),
+            category_id: Number(transferCat?.id),
+            occurred_at: `${form.date}T12:00:00`,
+          },
+        });
+        const created = await api("/api/v1/transactions", {
+          token,
+          method: "POST",
+          body: {
+            type: "income",
+            amount: amt,
+            note: form.note || "账户转入",
+            ledger_id: Number(form.ledger_id),
+            account_id: Number(form.to_account_id),
+            category_id: Number(incomeCat?.id),
+            occurred_at: `${form.date}T12:00:00`,
+          },
+        });
+        localStorage.removeItem(DRAFT_KEY);
+        if (keepGoing) {
+          show("转账已保存。继续记账会新建一笔。");
+          resetFormKeepMeta();
+        } else {
+          setSaved({ ...created, type: "expense", note: form.note || "账户转账", amount: amt });
+        }
+      } else {
+        const created = await api("/api/v1/transactions", {
+          token,
+          method: "POST",
+          body: {
+            type: form.type,
+            amount: amt,
+            note: form.note,
+            ledger_id: Number(form.ledger_id),
+            account_id: Number(form.account_id),
+            category_id: Number(form.category_id || selectedCat?.id),
+            occurred_at: `${form.date}T12:00:00`,
+          },
+        });
+        localStorage.removeItem(DRAFT_KEY);
+        if (keepGoing) {
+          show("已保存。继续记账会新建一笔。");
+          resetFormKeepMeta();
+        } else {
+          setSaved(created);
+        }
+      }
     } catch (err) {
       show(err.message);
+    } finally {
+      setSaving(false);
     }
   }
 
+  if (saved) {
+    return (
+      <AddSuccess
+        me={me}
+        saved={saved}
+        onAgain={resetFormKeepMeta}
+        onBills={() => {
+          onClose();
+          onGoBills?.();
+        }}
+        onHome={onClose}
+      />
+    );
+  }
+
   return (
-    <div className="modal-backdrop add-sheet-backdrop" onClick={onClose}>
-      <form
-        className="card modal add-sheet"
-        onSubmit={submit}
-        onClick={(e) => e.stopPropagation()}
-        aria-labelledby="add-sheet-title"
-      >
-        <div className="add-sheet-head">
-          <div>
-            <h2 id="add-sheet-title" className="add-sheet-title">
-              记一笔
-            </h2>
-            <p className="add-sheet-sub">选类型、金额与账本</p>
+    <div className="add-page">
+      <header className="add-page-head">
+        <button type="button" className="add-back" onClick={onClose} aria-label="返回">
+          <Icon name="chevron-left" size={22} />
+        </button>
+        <div className="add-page-titles">
+          <div className="add-page-title-row">
+            <h2 id="add-sheet-title">{isBiz ? "记经营账" : "记一笔"}</h2>
+            <button type="button" className="text-link" onClick={saveDraft}>
+              草稿
+            </button>
           </div>
-          <button type="button" className="text-link add-sheet-cancel" onClick={onClose}>
-            取消
-          </button>
+          <p className="add-page-sub">{draftHint}</p>
         </div>
+      </header>
 
-        <div className="add-sheet-body">
-          <div className="form-grid add-form">
-            <div style={{ gridColumn: "1 / -1" }}>
-              <Segmented
-                value={form.type}
-                options={[
-                  ["expense", "支出"],
-                  ["income", "收入"],
-                ]}
-                onChange={(type) => setForm({ ...form, type, category_id: "" })}
-              />
-            </div>
-            <label className="amount-field" style={{ gridColumn: "1 / -1" }}>
-              金额
-              <input
-                type="text"
-                inputMode="decimal"
-                pattern="[0-9]*[.]?[0-9]*"
-                value={form.amount}
-                onChange={(e) => setForm({ ...form, amount: e.target.value.replace(/[^\d.]/g, "") })}
-                placeholder="0.00"
-                required
-              />
-            </label>
-            <div className="field-block" style={{ gridColumn: "1 / -1" }}>
-              <span className="cat-label">账本</span>
-              <div className="chip-wrap">
-                {ledgers.map((l) => (
-                  <FilterChip
-                    key={l.id}
-                    active={String(form.ledger_id) === String(l.id)}
-                    onClick={() => setForm({ ...form, ledger_id: l.id, category_id: "" })}
-                    className="ledger-filter"
-                  >
-                    <LedgerThumb ledger={l} size={20} />
-                    {l.name}
-                  </FilterChip>
-                ))}
-              </div>
-            </div>
-            <label style={{ gridColumn: "1 / -1" }}>
-              账户
-              <select value={form.account_id} onChange={(e) => setForm({ ...form, account_id: e.target.value })}>
-                {accounts.map((a) => (
-                  <option key={a.id} value={a.id}>
-                    {a.name} · {accountKindLabel(a.kind)}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <div className="cat-block" style={{ gridColumn: "1 / -1" }}>
-              <span className="cat-label">分类</span>
-              <div className="chip-wrap">
-                {filteredCats.map((c) => (
-                  <FilterChip
-                    key={c.id}
-                    active={String(form.category_id || filteredCats[0]?.id) === String(c.id)}
-                    onClick={() => setForm({ ...form, category_id: c.id })}
-                  >
-                    {c.icon} {c.name}
-                  </FilterChip>
-                ))}
-              </div>
-            </div>
-            <label style={{ gridColumn: "1 / -1" }}>
-              备注
-              <input
-                value={form.note}
-                onChange={(e) => setForm({ ...form, note: e.target.value })}
-                placeholder="午饭 / 客户尾款 / 水电…"
-              />
-            </label>
+      <div className="add-page-body">
+        <Segmented
+          value={form.type}
+          options={[
+            ["expense", "支出"],
+            ["income", "收入"],
+            ["transfer", "转账"],
+          ]}
+          onChange={(type) => setForm({ ...form, type, category_id: "" })}
+        />
+
+        <div className="add-amount-block">
+          <span className="add-amount-label">{amountLabel}</span>
+          <div className="add-amount-value">
+            <span>{form.amount ? money(form.amount) : "0.00"}</span>
+            <i className="add-caret" aria-hidden />
           </div>
         </div>
 
-        <div className="add-sheet-foot">
-          <button className="btn add-submit" type="submit">
-            保存这笔
+        {!isTransfer && (
+          <div className="cat-grid add-cat-grid">
+            {visibleCats.map((c) => {
+              const on = String(selectedCat?.id) === String(c.id);
+              return (
+                <button
+                  key={c.id}
+                  type="button"
+                  className={`cat-tile ${on ? "on" : ""}`}
+                  onClick={() => setForm({ ...form, category_id: c.id })}
+                >
+                  <span className="cat-tile-icon">
+                    <CategoryIcon name={c.name} emoji={c.icon} size={22} />
+                  </span>
+                  <span className="cat-tile-label">{categoryLabel(c.name)}</span>
+                </button>
+              );
+            })}
+            {!moreCats && extraCats.length > 0 && (
+              <button type="button" className="cat-tile" onClick={() => setMoreCats(true)}>
+                <span className="cat-tile-icon">
+                  <Icon name="ellipsis" size={22} />
+                </span>
+                <span className="cat-tile-label">更多分类</span>
+              </button>
+            )}
+          </div>
+        )}
+
+        <div className="add-info-card">
+          {!isTransfer && (
+            <button type="button" className="add-field-row" onClick={() => setPicker(picker === "ledger" ? "" : "ledger")}>
+              <Icon name="notebook" size={18} />
+              <span>账本</span>
+              <strong>{ledger?.name || "选择账本"}</strong>
+              <Icon name="chevron-right" size={15} />
+            </button>
+          )}
+          <button type="button" className="add-field-row" onClick={() => setPicker(picker === "account" ? "" : "account")}>
+            <Icon name="wallet" size={18} />
+            <span>{form.type === "income" ? "收款账户" : isTransfer ? "转出账户" : "付款账户"}</span>
+            <strong>{account ? `${account.name}` : "选择账户"}</strong>
+            <Icon name="chevron-right" size={15} />
+          </button>
+          {isTransfer && (
+            <button
+              type="button"
+              className="add-field-row"
+              onClick={() => setPicker(picker === "transferTo" ? "" : "transferTo")}
+            >
+              <Icon name="wallet" size={18} />
+              <span>转入账户</span>
+              <strong>{toAccount ? `${toAccount.name}` : "选择账户"}</strong>
+              <Icon name="chevron-right" size={15} />
+            </button>
+          )}
+          <button type="button" className="add-field-row" onClick={() => setPicker(picker === "date" ? "" : "date")}>
+            <Icon name="calendar-days" size={18} />
+            <span>日期</span>
+            <strong>{formatCnDate(form.date)}</strong>
+            <Icon name="chevron-right" size={15} />
+          </button>
+          <div className="add-field-row static">
+            <Icon name="user" size={18} />
+            <span>{isBiz ? "记账成员" : "记账成员"}</span>
+            <strong>
+              {me?.user?.display_name || "我"}
+              {me?.user ? "（我）" : ""}
+            </strong>
+          </div>
+          <button type="button" className="add-field-row" onClick={() => setPicker(picker === "note" ? "" : "note")}>
+            <Icon name="paperclip" size={18} />
+            <span>备注 / 附件</span>
+            <strong>{form.note || "添加备注"}</strong>
+            <Icon name="chevron-right" size={15} />
           </button>
         </div>
-      </form>
+
+        {picker === "ledger" && (
+          <div className="add-picker">
+            {ledgers.map((l) => (
+              <button
+                key={l.id}
+                type="button"
+                className={String(form.ledger_id) === String(l.id) ? "on" : ""}
+                onClick={() => {
+                  setForm({ ...form, ledger_id: l.id, category_id: "" });
+                  setPicker("");
+                  setMoreCats(false);
+                }}
+              >
+                {l.icon} {l.name}
+              </button>
+            ))}
+          </div>
+        )}
+        {(picker === "account" || picker === "transferTo") && (
+          <div className="add-picker">
+            {accounts.map((a) => (
+              <button
+                key={a.id}
+                type="button"
+                className={
+                  String(picker === "transferTo" ? form.to_account_id : form.account_id) === String(a.id) ? "on" : ""
+                }
+                onClick={() => {
+                  if (picker === "transferTo") setForm({ ...form, to_account_id: a.id });
+                  else setForm({ ...form, account_id: a.id });
+                  setPicker("");
+                }}
+              >
+                {a.name} · {accountKindLabel(a.kind)}
+              </button>
+            ))}
+          </div>
+        )}
+        {picker === "date" && (
+          <div className="add-picker">
+            <input
+              type="date"
+              value={form.date}
+              onChange={(e) => {
+                setForm({ ...form, date: e.target.value });
+                setPicker("");
+              }}
+            />
+          </div>
+        )}
+        {picker === "note" && (
+          <div className="add-picker">
+            <input
+              autoFocus
+              value={form.note}
+              placeholder="午饭 / 客户尾款 / 水电…"
+              onChange={(e) => setForm({ ...form, note: e.target.value })}
+              onBlur={() => setPicker("")}
+            />
+          </div>
+        )}
+
+        <div className="num-pad" role="group" aria-label="数字键盘">
+          {["1", "2", "3", "4", "5", "6", "7", "8", "9", ".", "0", "back"].map((k) => (
+            <button key={k} type="button" className="num-key" onClick={() => tapKey(k)}>
+              {k === "back" ? <Icon name="backspace" size={22} /> : k}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="add-page-foot dual">
+        <button type="button" className="btn secondary" disabled={saving} onClick={() => submit(true)}>
+          保存并再记
+        </button>
+        <button type="button" className="btn" disabled={saving} onClick={() => submit(false)}>
+          {saving ? "保存中…" : "保存账单"}
+        </button>
+      </div>
+      <p className="add-page-hint">草稿尚未计入收支 · 保存后自动同步家庭账本</p>
     </div>
   );
 }
