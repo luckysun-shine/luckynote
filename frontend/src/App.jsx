@@ -2796,7 +2796,7 @@ function AddSuccess({ me, saved, onAgain, onBills, onHome }) {
   return (
     <div className="modal-backdrop add-sheet-backdrop" onClick={onHome}>
       <div
-        className="add-sheet-panel add-success-page"
+        className="add-sheet-panel add-sheet-card add-success-page"
         role="dialog"
         aria-labelledby="add-success-title"
         onClick={(e) => e.stopPropagation()}
@@ -3006,13 +3006,12 @@ function AddSheet({ token, me, show, onClose, onGoBills }) {
   return (
     <div className="modal-backdrop add-sheet-backdrop" onClick={onClose}>
       <div
-        className="add-sheet-panel"
+        className="add-sheet-panel add-sheet-card"
         role="dialog"
         aria-modal="true"
         aria-labelledby="add-sheet-title"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="add-sheet-grab" aria-hidden />
         <header className="add-page-head">
           <div className="add-page-titles">
             <div className="add-page-title-row">
@@ -3059,7 +3058,7 @@ function AddSheet({ token, me, show, onClose, onGoBills }) {
                   onClick={() => setForm({ ...form, category_id: c.id })}
                 >
                   <span className="cat-tile-icon">
-                    <CategoryIcon name={c.name} emoji={c.icon} size={20} />
+                    <CategoryIcon name={c.name} emoji={c.icon} size={18} />
                   </span>
                   <span className="cat-tile-label">{categoryLabel(c.name)}</span>
                 </button>
@@ -3068,7 +3067,7 @@ function AddSheet({ token, me, show, onClose, onGoBills }) {
             {!moreCats && extraCats.length > 0 && (
               <button type="button" className="cat-tile" onClick={() => setMoreCats(true)}>
                 <span className="cat-tile-icon">
-                  <Icon name="ellipsis" size={20} />
+                  <Icon name="ellipsis" size={18} />
                 </span>
                 <span className="cat-tile-label">更多分类</span>
               </button>
@@ -3081,40 +3080,32 @@ function AddSheet({ token, me, show, onClose, onGoBills }) {
               className="add-field-row"
               onClick={() => setPicker(picker === "ledger" ? "" : "ledger")}
             >
-              <Icon name="notebook" size={18} />
+              <Icon name="notebook" size={16} />
               <span>账本</span>
               <strong>{ledger?.name || "选择账本"}</strong>
-              <Icon name="chevron-right" size={15} />
+              <Icon name="chevron-right" size={14} />
             </button>
             <button
               type="button"
               className="add-field-row"
               onClick={() => setPicker(picker === "account" ? "" : "account")}
             >
-              <Icon name="wallet" size={18} />
+              <Icon name="wallet" size={16} />
               <span>{form.type === "income" ? "收款账户" : "付款账户"}</span>
               <strong>{account ? `${account.name}` : "选择账户"}</strong>
-              <Icon name="chevron-right" size={15} />
+              <Icon name="chevron-right" size={14} />
             </button>
             <button type="button" className="add-field-row" onClick={() => setPicker(picker === "date" ? "" : "date")}>
-              <Icon name="calendar-days" size={18} />
+              <Icon name="calendar-days" size={16} />
               <span>日期</span>
               <strong>{formatCnDate(form.date)}</strong>
-              <Icon name="chevron-right" size={15} />
+              <Icon name="chevron-right" size={14} />
             </button>
-            <div className="add-field-row static">
-              <Icon name="user" size={18} />
-              <span>记账成员</span>
-              <strong>
-                {me?.user?.display_name || "我"}
-                {me?.user ? "（我）" : ""}
-              </strong>
-            </div>
             <button type="button" className="add-field-row" onClick={() => setPicker(picker === "note" ? "" : "note")}>
-              <Icon name="paperclip" size={18} />
-              <span>备注 / 附件</span>
-              <strong>{form.note || "添加备注"}</strong>
-              <Icon name="chevron-right" size={15} />
+              <Icon name="paperclip" size={16} />
+              <span>备注</span>
+              <strong>{form.note || "可选"}</strong>
+              <Icon name="chevron-right" size={14} />
             </button>
           </div>
 
@@ -3180,7 +3171,7 @@ function AddSheet({ token, me, show, onClose, onGoBills }) {
           <div className="num-pad add-num-pad-inline" role="group" aria-label="数字键盘">
             {["1", "2", "3", "4", "5", "6", "7", "8", "9", ".", "0", "back"].map((k) => (
               <button key={k} type="button" className="num-key" onClick={() => tapKey(k)}>
-                {k === "back" ? <Icon name="backspace" size={20} /> : k}
+                {k === "back" ? <Icon name="backspace" size={18} /> : k}
               </button>
             ))}
           </div>
@@ -3195,7 +3186,6 @@ function AddSheet({ token, me, show, onClose, onGoBills }) {
               {saving ? "保存中…" : "保存账单"}
             </button>
           </div>
-          <p className="add-page-hint">草稿尚未计入收支 · 保存后自动同步家庭账本</p>
         </div>
       </div>
     </div>

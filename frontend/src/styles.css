@@ -3632,31 +3632,41 @@ textarea {
 .add-sheet-backdrop {
   z-index: 50;
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   justify-content: center;
   place-items: unset;
-  padding: 0;
+  padding: max(12px, env(safe-area-inset-top, 0px)) 16px max(12px, env(safe-area-inset-bottom, 0px));
   background: rgba(30, 26, 48, 0.42);
+  /* 允许弹层内部纵向滑动，勿用 none / manipulation 拦截 */
+  touch-action: pan-y;
 }
 
 .add-sheet-panel {
-  width: min(480px, 100%);
-  height: min(92dvh, 92vh);
-  max-height: min(92dvh, 92vh);
+  width: min(360px, calc(100vw - 32px));
+  height: auto;
+  max-height: min(78dvh, 78vh);
   background: var(--bg);
-  border-radius: 22px 22px 0 0;
-  box-shadow: 0 -12px 40px rgba(40, 30, 80, 0.18);
+  border-radius: 20px;
+  box-shadow: 0 18px 48px rgba(40, 30, 80, 0.22);
   display: flex;
   flex-direction: column;
-  overflow: hidden;
-  animation: add-sheet-up 0.28s var(--ease);
-  padding-bottom: env(safe-area-inset-bottom, 0px);
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+  animation: add-sheet-up 0.24s var(--ease);
+}
+
+.add-sheet-card {
+  /* 居中小卡片：内容自适应高度，超出时整卡滚动 */
+  flex: 0 1 auto;
 }
 
 @keyframes add-sheet-up {
   from {
-    opacity: 0.6;
-    transform: translateY(28px);
+    opacity: 0.55;
+    transform: translateY(12px) scale(0.98);
   }
   to {
     opacity: 1;
@@ -3665,22 +3675,20 @@ textarea {
 }
 
 .add-sheet-grab {
-  width: 40px;
-  height: 4px;
-  border-radius: 999px;
-  background: rgba(90, 80, 120, 0.22);
-  margin: 10px auto 2px;
-  flex-shrink: 0;
+  display: none;
 }
 
 .add-page-head {
   display: flex;
   align-items: flex-start;
   gap: 8px;
-  padding: 6px 16px 8px;
+  padding: 12px 14px 6px;
   flex-shrink: 0;
   background: var(--bg);
   border-bottom: 1px solid rgba(22, 25, 31, 0.05);
+  position: sticky;
+  top: 0;
+  z-index: 2;
 }
 
 .add-back {
@@ -3718,28 +3726,28 @@ textarea {
 
 .add-page-head h2 {
   margin: 0;
-  font-size: 1.2rem;
+  font-size: 1.05rem;
   font-weight: 700;
   color: var(--ink);
 }
 
 .add-page-sub {
-  margin: 4px 0 0;
-  font-size: 0.72rem;
+  margin: 2px 0 0;
+  font-size: 0.68rem;
   color: var(--ink2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .add-page-body {
-  flex: 1 1 auto;
+  flex: 0 0 auto;
   min-height: 0;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  padding: 8px 16px 12px;
+  overflow: visible;
+  padding: 6px 14px 4px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  -webkit-overflow-scrolling: touch;
-  touch-action: pan-y;
+  gap: 8px;
 }
 
 .add-sheet-dock {
@@ -3748,26 +3756,40 @@ textarea {
   border-top: 1px solid rgba(22, 25, 31, 0.06);
   padding: 8px 12px 4px;
   box-shadow: 0 -6px 18px rgba(40, 30, 80, 0.06);
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
 }
 
 .add-sheet-dock-compact {
-  padding: 10px 12px calc(6px + env(safe-area-inset-bottom, 0px));
+  padding: 8px 12px 10px;
 }
 
 .add-num-pad-inline {
-  margin: 4px 0 8px;
+  margin: 0;
   flex-shrink: 0;
 }
 
+.add-sheet-card .num-pad {
+  gap: 4px;
+  margin: 0;
+}
+
+.add-sheet-card .num-key {
+  min-height: 34px;
+  border-radius: 10px;
+  font-size: 1.05rem;
+}
+
 .add-amount-block {
-  padding: 2px 0 0;
+  padding: 0;
 }
 
 .add-amount-label {
   display: block;
-  font-size: 0.75rem;
+  font-size: 0.7rem;
   color: var(--ink2);
-  margin-bottom: 4px;
+  margin-bottom: 2px;
 }
 
 .add-amount-value {
@@ -3775,7 +3797,7 @@ textarea {
   align-items: center;
   gap: 4px;
   font-family: Inter, "Noto Sans SC", sans-serif;
-  font-size: clamp(1.55rem, 6.5vw, 2rem);
+  font-size: 1.45rem;
   font-weight: 700;
   color: var(--ink);
   letter-spacing: -0.03em;
@@ -3785,7 +3807,7 @@ textarea {
 
 .add-caret {
   width: 2px;
-  height: 1.6rem;
+  height: 1.2rem;
   background: var(--brand-mid);
   border-radius: 2px;
   animation: caret-blink 1s steps(1) infinite;
@@ -3798,34 +3820,43 @@ textarea {
 }
 
 .add-cat-grid {
-  margin: 2px 0;
+  margin: 0;
+  gap: 8px 4px;
+}
+
+.add-cat-grid .cat-tile {
+  gap: 4px;
 }
 
 .add-cat-grid .cat-tile-icon {
-  width: 40px;
-  height: 38px;
-  border-radius: 12px;
+  width: 34px;
+  height: 32px;
+  border-radius: 10px;
+}
+
+.add-cat-grid .cat-tile-label {
+  font-size: 0.62rem;
 }
 
 .add-info-card {
   background: var(--paper);
-  border-radius: 18px;
+  border-radius: 14px;
   box-shadow: var(--shadow);
   overflow: hidden;
 }
 
 .add-field-row {
   display: grid;
-  grid-template-columns: 18px auto 1fr 15px;
+  grid-template-columns: 16px auto 1fr 14px;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   width: 100%;
   border: 0;
   border-bottom: 1px solid var(--line);
   background: transparent;
-  padding: 11px 14px;
+  padding: 8px 12px;
   font-family: inherit;
-  font-size: 0.875rem;
+  font-size: 0.8rem;
   color: var(--ink2);
   text-align: left;
   cursor: pointer;
@@ -3938,8 +3969,25 @@ textarea {
 
 .add-page-foot .btn {
   width: 100%;
-  min-height: 46px;
-  border-radius: 14px;
+  min-height: 40px;
+  border-radius: 12px;
+  font-size: 0.875rem;
+}
+
+.add-sheet-card .add-page-foot.dual {
+  gap: 6px;
+}
+
+.add-sheet-card .segmented {
+  padding: 3px;
+  border-radius: 10px;
+}
+
+.add-sheet-card .segmented-item {
+  min-height: 34px;
+  padding: 6px 8px;
+  font-size: 0.8rem;
+  border-radius: 8px;
 }
 
 .add-page-foot .btn.danger,
@@ -4138,26 +4186,12 @@ textarea {
 
 @media (min-width: 900px) {
   .add-sheet-backdrop {
-    align-items: center;
     padding: 24px;
   }
 
   .add-sheet-panel {
-    height: auto;
-    max-height: min(860px, 92vh);
-    border-radius: 22px;
-    animation-name: add-sheet-fade;
-  }
-
-  @keyframes add-sheet-fade {
-    from {
-      opacity: 0.5;
-      transform: translateY(10px) scale(0.98);
-    }
-    to {
-      opacity: 1;
-      transform: none;
-    }
+    width: min(380px, 100%);
+    max-height: min(720px, 82vh);
   }
 }
 
