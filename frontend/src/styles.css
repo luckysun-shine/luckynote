@@ -1425,9 +1425,27 @@ textarea {
 }
 
 .icon-thumb {
-  background: rgba(255, 255, 255, 0.85);
-  border: 1px solid var(--line);
-  color: var(--ink);
+  background: var(--brand-l);
+  border: 1px solid transparent;
+  color: var(--brand-mid);
+  display: inline-grid;
+  place-items: center;
+}
+
+.chip.icon-chip {
+  width: 42px;
+  height: 42px;
+  padding: 0;
+  display: inline-grid;
+  place-items: center;
+  color: var(--brand-mid);
+  background: var(--brand-l);
+  border-radius: 12px;
+}
+
+.chip.icon-chip.on {
+  background: var(--brand-mid);
+  color: #fff;
 }
 
 .who-row {
@@ -3457,10 +3475,6 @@ textarea {
   max-width: 100%;
 }
 
-.add-sheet-backdrop {
-  z-index: 40;
-}
-
 .add-sheet {
   width: min(480px, 100%);
   max-height: min(92dvh, 92vh, 760px);
@@ -3606,24 +3620,33 @@ textarea {
   border-radius: 12px;
 }
 
-.add-page {
-  position: fixed;
-  inset: 0;
+.add-sheet-backdrop {
   z-index: 50;
-  background: var(--bg);
   display: flex;
-  flex-direction: column;
-  max-width: 480px;
-  margin: 0 auto;
-  width: 100%;
-  overflow: hidden;
-  animation: add-page-in 0.28s var(--ease);
+  align-items: flex-end;
+  justify-content: center;
+  place-items: unset;
+  padding: 0;
+  background: rgba(30, 26, 48, 0.42);
 }
 
-@keyframes add-page-in {
+.add-sheet-panel {
+  width: min(480px, 100%);
+  max-height: min(94dvh, 94vh);
+  background: var(--bg);
+  border-radius: 22px 22px 0 0;
+  box-shadow: 0 -12px 40px rgba(40, 30, 80, 0.18);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: add-sheet-up 0.28s var(--ease);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+@keyframes add-sheet-up {
   from {
-    opacity: 0.4;
-    transform: translateY(12px);
+    opacity: 0.6;
+    transform: translateY(28px);
   }
   to {
     opacity: 1;
@@ -3631,12 +3654,23 @@ textarea {
   }
 }
 
+.add-sheet-grab {
+  width: 40px;
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(90, 80, 120, 0.22);
+  margin: 10px auto 2px;
+  flex-shrink: 0;
+}
+
 .add-page-head {
   display: flex;
   align-items: flex-start;
   gap: 8px;
-  padding: 14px 16px 8px;
+  padding: 6px 16px 8px;
   flex-shrink: 0;
+  background: var(--bg);
+  border-bottom: 1px solid rgba(22, 25, 31, 0.05);
 }
 
 .add-back {
@@ -3665,16 +3699,23 @@ textarea {
   gap: 8px;
 }
 
+.add-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
 .add-page-head h2 {
   margin: 0;
-  font-size: 1.35rem;
+  font-size: 1.2rem;
   font-weight: 700;
   color: var(--ink);
 }
 
 .add-page-sub {
   margin: 4px 0 0;
-  font-size: 0.75rem;
+  font-size: 0.72rem;
   color: var(--ink2);
 }
 
@@ -3682,11 +3723,21 @@ textarea {
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
-  padding: 8px 20px 12px;
+  overscroll-behavior: contain;
+  padding: 8px 16px 12px;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 12px;
   -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+}
+
+.add-sheet-dock {
+  flex-shrink: 0;
+  background: #fff;
+  border-top: 1px solid rgba(22, 25, 31, 0.06);
+  padding: 8px 12px 4px;
+  box-shadow: 0 -6px 18px rgba(40, 30, 80, 0.06);
 }
 
 .add-amount-block {
@@ -3705,7 +3756,7 @@ textarea {
   align-items: center;
   gap: 4px;
   font-family: Inter, "Noto Sans SC", sans-serif;
-  font-size: 2.4rem;
+  font-size: 2rem;
   font-weight: 700;
   color: var(--ink);
   letter-spacing: -0.03em;
@@ -3802,6 +3853,9 @@ textarea {
   font-size: 0.875rem;
   color: var(--ink);
   cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
 .add-picker button.on,
@@ -3822,23 +3876,23 @@ textarea {
 .num-pad {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
-  margin-top: 4px;
+  gap: 6px;
+  margin: 0 4px 8px;
 }
 
 .num-key {
   border: 0;
-  background: #fff;
-  border-radius: 14px;
-  min-height: 48px;
+  background: var(--bg);
+  border-radius: 12px;
+  min-height: 42px;
   font-family: Inter, "Noto Sans SC", sans-serif;
-  font-size: 1.35rem;
+  font-size: 1.2rem;
   font-weight: 500;
   color: var(--ink);
-  box-shadow: var(--shadow);
   cursor: pointer;
   display: grid;
   place-items: center;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .num-key:active {
@@ -3848,19 +3902,19 @@ textarea {
 
 .add-page-foot {
   flex-shrink: 0;
-  padding: 10px 20px 6px;
+  padding: 4px 4px 2px;
 }
 
 .add-page-foot.dual {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 10px;
+  gap: 8px;
 }
 
 .add-page-foot .btn {
   width: 100%;
-  min-height: 50px;
-  border-radius: 16px;
+  min-height: 46px;
+  border-radius: 14px;
 }
 
 .add-page-foot .btn.danger,
@@ -3870,16 +3924,16 @@ textarea {
 
 .add-page-hint {
   text-align: center;
-  font-size: 0.7rem;
+  font-size: 0.68rem;
   color: var(--muted);
-  padding: 0 20px max(12px, env(safe-area-inset-bottom));
+  padding: 4px 8px 8px;
   margin: 0;
   flex-shrink: 0;
 }
 
 .add-success-page .add-success-hero {
   text-align: center;
-  padding: 28px 20px 8px;
+  padding: 12px 8px 4px;
 }
 
 .add-success-check {
@@ -4058,25 +4112,40 @@ textarea {
 }
 
 @media (min-width: 900px) {
-  .add-page {
-    max-width: 420px;
-    right: auto;
-    left: 50%;
-    transform: translateX(-50%);
-    border-radius: 24px;
-    top: 24px;
-    bottom: 24px;
-    box-shadow: 0 24px 64px rgba(40, 30, 80, 0.2);
+  .add-sheet-backdrop {
+    align-items: center;
+    padding: 24px;
   }
 
-  @keyframes add-page-in {
+  .add-sheet-panel {
+    max-height: min(860px, 92vh);
+    border-radius: 22px;
+    animation-name: add-sheet-fade;
+  }
+
+  @keyframes add-sheet-fade {
     from {
-      opacity: 0.4;
-      transform: translateX(-50%) translateY(12px);
+      opacity: 0.5;
+      transform: translateY(10px) scale(0.98);
     }
     to {
       opacity: 1;
-      transform: translateX(-50%);
+      transform: none;
     }
   }
+}
+
+/* 账单详情仍可用全屏页，但保证可滚动 */
+.tx-detail-page.add-page,
+.add-page.tx-detail-page {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+  max-width: 480px;
+  margin: 0 auto;
+  width: 100%;
+  overflow: hidden;
 }

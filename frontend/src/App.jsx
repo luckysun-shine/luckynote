@@ -87,6 +87,41 @@ function UserAvatar({ user, size = 36, className = "" }) {
   );
 }
 
+const LEDGER_ICON_KEYS = [
+  "notebook",
+  "house",
+  "user",
+  "briefcase",
+  "sparkles",
+  "utensils",
+  "train-front",
+  "gift",
+  "wallet",
+  "book",
+  "coffee",
+  "package",
+];
+
+const LEDGER_EMOJI_TO_ICON = {
+  "📒": "notebook",
+  "🏠": "house",
+  "👤": "user",
+  "💼": "briefcase",
+  "🎨": "sparkles",
+  "🍜": "utensils",
+  "🚗": "train-front",
+  "🎁": "gift",
+  "💰": "wallet",
+  "🐾": "sparkles",
+  "📚": "book",
+  "🌿": "sparkles",
+};
+
+function resolveLedgerIcon(icon = "") {
+  if (LEDGER_ICON_KEYS.includes(icon)) return icon;
+  return LEDGER_EMOJI_TO_ICON[icon] || "notebook";
+}
+
 function LedgerThumb({ ledger, size = 40, className = "" }) {
   const px = size;
   if (ledger?.cover_url) {
@@ -101,12 +136,14 @@ function LedgerThumb({ ledger, size = 40, className = "" }) {
       />
     );
   }
+  const iconSize = Math.max(14, Math.round(px * 0.48));
   return (
     <span
       className={`ledger-thumb icon-thumb ${className}`}
-      style={{ width: px, height: px, fontSize: px * 0.55 }}
+      style={{ width: px, height: px }}
+      aria-hidden
     >
-      {ledger?.icon || "📒"}
+      <Icon name={resolveLedgerIcon(ledger?.icon)} size={iconSize} />
     </span>
   );
 }
@@ -1611,7 +1648,7 @@ function Home({ token, me, go, show, openSettings }) {
     <div className="home-page">
       <div className="home-top">
         <div>
-          <h2>{householdName}</h2>
+          <h2>LuckyNote</h2>
           <p className="sub">
             {householdName} · {isLife ? "生活账" : "经营账"}
           </p>
@@ -1635,7 +1672,6 @@ function Home({ token, me, go, show, openSettings }) {
           <span className="t" style={{ color: "var(--ink)", fontWeight: 600 }}>
             {monthLabel} · {isLife ? "生活账" : "经营账"}
           </span>
-          <span className="hero-sample-pill">示例数据</span>
         </div>
         <div className="lbl" style={{ color: "var(--ink2)" }}>
           {isLife ? "本月支出" : "本月实付"}
@@ -2455,7 +2491,7 @@ function TxEditModal({ tx, token, me, ledgers, accounts, cats, onClose, onSaved,
           >
             {ledgers.map((l) => (
               <option key={l.id} value={l.id}>
-                {l.icon} {l.name}
+                <LedgerThumb ledger={l} size={22} /> {l.name}
               </option>
             ))}
           </select>
@@ -2659,52 +2695,64 @@ function emptyAddForm(partial = {}) {
 function AddSuccess({ me, saved, onAgain, onBills, onHome }) {
   const isBiz = saved?.ledger_type === "business";
   return (
-    <div className="add-page add-success-page">
-      <header className="add-page-head">
-        <button type="button" className="add-back" onClick={onHome} aria-label="返回">
-          <Icon name="chevron-left" size={22} />
-        </button>
-        <div>
-          <h2>记账完成</h2>
-          <p className="add-page-sub">{me?.household?.name || "家庭"} · 已同步</p>
+    <div className="modal-backdrop add-sheet-backdrop" onClick={onHome}>
+      <div
+        className="add-sheet-panel add-success-page"
+        role="dialog"
+        aria-labelledby="add-success-title"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="add-sheet-grab" aria-hidden />
+        <header className="add-page-head">
+          <div className="add-page-titles">
+            <div className="add-page-title-row">
+              <h2 id="add-success-title">记账完成</h2>
+              <button type="button" className="text-link add-sheet-cancel" onClick={onHome}>
+                完成
+              </button>
+            </div>
+            <p className="add-page-sub">{me?.household?.name || "家庭"} · 已同步</p>
+          </div>
+        </header>
+        <div className="add-page-body">
+          <div className="add-success-hero">
+            <span className="add-success-check">
+              <Icon name="circle-check" size={48} />
+            </span>
+            <h3>保存成功</h3>
+            <p>这笔账已记入家庭账本</p>
+            <span className="add-success-pill">{isBiz ? "经营账" : "生活账"}</span>
+          </div>
+          <div className="add-info-card add-success-card">
+            <div className="add-success-card-top">
+              <span>{saved?.note || categoryLabel(saved?.category_name) || "账单"}</span>
+              <span className={`add-type-tag ${saved?.type}`}>{saved?.type === "income" ? "收入" : "支出"}</span>
+            </div>
+            <div className={`add-success-amt ${saved?.type}`}>
+              {saved?.type === "expense" ? "−" : "+"}¥{money(saved?.amount)}
+            </div>
+            <div className="add-field-row static">
+              <span>分类</span>
+              <strong>{categoryLabel(saved?.category_name)}</strong>
+            </div>
+            <div className="add-field-row static">
+              <span>账户</span>
+              <strong>{saved?.account_name}</strong>
+            </div>
+            <div className="add-field-row static">
+              <span>记账时间</span>
+              <strong>{formatCnDate(saved?.occurred_at)}</strong>
+            </div>
+          </div>
         </div>
-      </header>
-      <div className="add-success-hero">
-        <span className="add-success-check">
-          <Icon name="circle-check" size={48} />
-        </span>
-        <h3>保存成功</h3>
-        <p>这笔账已记入家庭账本</p>
-        <span className="add-success-pill">{isBiz ? "经营账" : "生活账"}</span>
-      </div>
-      <div className="add-info-card add-success-card">
-        <div className="add-success-card-top">
-          <span>{saved?.note || categoryLabel(saved?.category_name) || "账单"}</span>
-          <span className={`add-type-tag ${saved?.type}`}>{saved?.type === "income" ? "收入" : "支出"}</span>
+        <div className="add-page-foot dual">
+          <button type="button" className="btn secondary" onClick={onAgain}>
+            再记一笔
+          </button>
+          <button type="button" className="btn" onClick={onBills}>
+            查看账单
+          </button>
         </div>
-        <div className={`add-success-amt ${saved?.type}`}>
-          {saved?.type === "expense" ? "−" : "+"}¥{money(saved?.amount)}
-        </div>
-        <div className="add-field-row static">
-          <span>分类</span>
-          <strong>{categoryLabel(saved?.category_name)}</strong>
-        </div>
-        <div className="add-field-row static">
-          <span>账户</span>
-          <strong>{saved?.account_name}</strong>
-        </div>
-        <div className="add-field-row static">
-          <span>记账时间</span>
-          <strong>{formatCnDate(saved?.occurred_at)}</strong>
-        </div>
-      </div>
-      <div className="add-page-foot dual">
-        <button type="button" className="btn secondary" onClick={onAgain}>
-          再记一笔
-        </button>
-        <button type="button" className="btn" onClick={onBills}>
-          查看账单
-        </button>
       </div>
     </div>
   );
@@ -2911,199 +2959,219 @@ function AddSheet({ token, me, show, onClose, onGoBills }) {
   }
 
   return (
-    <div className="add-page">
-      <header className="add-page-head">
-        <button type="button" className="add-back" onClick={onClose} aria-label="返回">
-          <Icon name="chevron-left" size={22} />
-        </button>
-        <div className="add-page-titles">
-          <div className="add-page-title-row">
-            <h2 id="add-sheet-title">{isBiz ? "记经营账" : "记一笔"}</h2>
-            <button type="button" className="text-link" onClick={saveDraft}>
-              草稿
-            </button>
-          </div>
-          <p className="add-page-sub">{draftHint}</p>
-        </div>
-      </header>
-
-      <div className="add-page-body">
-        <Segmented
-          value={form.type}
-          options={[
-            ["expense", "支出"],
-            ["income", "收入"],
-            ["transfer", "转账"],
-          ]}
-          onChange={(type) => setForm({ ...form, type, category_id: "" })}
-        />
-
-        <div className="add-amount-block">
-          <span className="add-amount-label">{amountLabel}</span>
-          <div className="add-amount-value">
-            <span>{form.amount ? money(form.amount) : "0.00"}</span>
-            <i className="add-caret" aria-hidden />
-          </div>
-        </div>
-
-        {!isTransfer && (
-          <div className="cat-grid add-cat-grid">
-            {visibleCats.map((c) => {
-              const on = String(selectedCat?.id) === String(c.id);
-              return (
-                <button
-                  key={c.id}
-                  type="button"
-                  className={`cat-tile ${on ? "on" : ""}`}
-                  onClick={() => setForm({ ...form, category_id: c.id })}
-                >
-                  <span className="cat-tile-icon">
-                    <CategoryIcon name={c.name} emoji={c.icon} size={22} />
-                  </span>
-                  <span className="cat-tile-label">{categoryLabel(c.name)}</span>
+    <div className="modal-backdrop add-sheet-backdrop" onClick={onClose}>
+      <div
+        className="add-sheet-panel"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="add-sheet-title"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="add-sheet-grab" aria-hidden />
+        <header className="add-page-head">
+          <div className="add-page-titles">
+            <div className="add-page-title-row">
+              <h2 id="add-sheet-title">{isBiz ? "记经营账" : "记一笔"}</h2>
+              <div className="add-head-actions">
+                <button type="button" className="text-link" onClick={saveDraft}>
+                  草稿
                 </button>
-              );
-            })}
-            {!moreCats && extraCats.length > 0 && (
-              <button type="button" className="cat-tile" onClick={() => setMoreCats(true)}>
-                <span className="cat-tile-icon">
-                  <Icon name="ellipsis" size={22} />
-                </span>
-                <span className="cat-tile-label">更多分类</span>
+                <button type="button" className="text-link add-sheet-cancel" onClick={onClose}>
+                  取消
+                </button>
+              </div>
+            </div>
+            <p className="add-page-sub">{draftHint}</p>
+          </div>
+        </header>
+
+        <div className="add-page-body">
+          <Segmented
+            value={form.type}
+            options={[
+              ["expense", "支出"],
+              ["income", "收入"],
+              ["transfer", "转账"],
+            ]}
+            onChange={(type) => setForm({ ...form, type, category_id: "" })}
+          />
+
+          <div className="add-amount-block">
+            <span className="add-amount-label">{amountLabel}</span>
+            <div className="add-amount-value">
+              <span>{form.amount ? money(form.amount) : "0.00"}</span>
+              <i className="add-caret" aria-hidden />
+            </div>
+          </div>
+
+          {!isTransfer && (
+            <div className="cat-grid add-cat-grid">
+              {visibleCats.map((c) => {
+                const on = String(selectedCat?.id) === String(c.id);
+                return (
+                  <button
+                    key={c.id}
+                    type="button"
+                    className={`cat-tile ${on ? "on" : ""}`}
+                    onClick={() => setForm({ ...form, category_id: c.id })}
+                  >
+                    <span className="cat-tile-icon">
+                      <CategoryIcon name={c.name} emoji={c.icon} size={22} />
+                    </span>
+                    <span className="cat-tile-label">{categoryLabel(c.name)}</span>
+                  </button>
+                );
+              })}
+              {!moreCats && extraCats.length > 0 && (
+                <button type="button" className="cat-tile" onClick={() => setMoreCats(true)}>
+                  <span className="cat-tile-icon">
+                    <Icon name="ellipsis" size={22} />
+                  </span>
+                  <span className="cat-tile-label">更多分类</span>
+                </button>
+              )}
+            </div>
+          )}
+
+          <div className="add-info-card">
+            {!isTransfer && (
+              <button
+                type="button"
+                className="add-field-row"
+                onClick={() => setPicker(picker === "ledger" ? "" : "ledger")}
+              >
+                <Icon name="notebook" size={18} />
+                <span>账本</span>
+                <strong>{ledger?.name || "选择账本"}</strong>
+                <Icon name="chevron-right" size={15} />
               </button>
             )}
-          </div>
-        )}
-
-        <div className="add-info-card">
-          {!isTransfer && (
-            <button type="button" className="add-field-row" onClick={() => setPicker(picker === "ledger" ? "" : "ledger")}>
-              <Icon name="notebook" size={18} />
-              <span>账本</span>
-              <strong>{ledger?.name || "选择账本"}</strong>
-              <Icon name="chevron-right" size={15} />
-            </button>
-          )}
-          <button type="button" className="add-field-row" onClick={() => setPicker(picker === "account" ? "" : "account")}>
-            <Icon name="wallet" size={18} />
-            <span>{form.type === "income" ? "收款账户" : isTransfer ? "转出账户" : "付款账户"}</span>
-            <strong>{account ? `${account.name}` : "选择账户"}</strong>
-            <Icon name="chevron-right" size={15} />
-          </button>
-          {isTransfer && (
             <button
               type="button"
               className="add-field-row"
-              onClick={() => setPicker(picker === "transferTo" ? "" : "transferTo")}
+              onClick={() => setPicker(picker === "account" ? "" : "account")}
             >
               <Icon name="wallet" size={18} />
-              <span>转入账户</span>
-              <strong>{toAccount ? `${toAccount.name}` : "选择账户"}</strong>
+              <span>{form.type === "income" ? "收款账户" : isTransfer ? "转出账户" : "付款账户"}</span>
+              <strong>{account ? `${account.name}` : "选择账户"}</strong>
               <Icon name="chevron-right" size={15} />
             </button>
-          )}
-          <button type="button" className="add-field-row" onClick={() => setPicker(picker === "date" ? "" : "date")}>
-            <Icon name="calendar-days" size={18} />
-            <span>日期</span>
-            <strong>{formatCnDate(form.date)}</strong>
-            <Icon name="chevron-right" size={15} />
-          </button>
-          <div className="add-field-row static">
-            <Icon name="user" size={18} />
-            <span>{isBiz ? "记账成员" : "记账成员"}</span>
-            <strong>
-              {me?.user?.display_name || "我"}
-              {me?.user ? "（我）" : ""}
-            </strong>
-          </div>
-          <button type="button" className="add-field-row" onClick={() => setPicker(picker === "note" ? "" : "note")}>
-            <Icon name="paperclip" size={18} />
-            <span>备注 / 附件</span>
-            <strong>{form.note || "添加备注"}</strong>
-            <Icon name="chevron-right" size={15} />
-          </button>
-        </div>
-
-        {picker === "ledger" && (
-          <div className="add-picker">
-            {ledgers.map((l) => (
+            {isTransfer && (
               <button
-                key={l.id}
                 type="button"
-                className={String(form.ledger_id) === String(l.id) ? "on" : ""}
-                onClick={() => {
-                  setForm({ ...form, ledger_id: l.id, category_id: "" });
-                  setPicker("");
-                  setMoreCats(false);
-                }}
+                className="add-field-row"
+                onClick={() => setPicker(picker === "transferTo" ? "" : "transferTo")}
               >
-                {l.icon} {l.name}
+                <Icon name="wallet" size={18} />
+                <span>转入账户</span>
+                <strong>{toAccount ? `${toAccount.name}` : "选择账户"}</strong>
+                <Icon name="chevron-right" size={15} />
               </button>
-            ))}
-          </div>
-        )}
-        {(picker === "account" || picker === "transferTo") && (
-          <div className="add-picker">
-            {accounts.map((a) => (
-              <button
-                key={a.id}
-                type="button"
-                className={
-                  String(picker === "transferTo" ? form.to_account_id : form.account_id) === String(a.id) ? "on" : ""
-                }
-                onClick={() => {
-                  if (picker === "transferTo") setForm({ ...form, to_account_id: a.id });
-                  else setForm({ ...form, account_id: a.id });
-                  setPicker("");
-                }}
-              >
-                {a.name} · {accountKindLabel(a.kind)}
-              </button>
-            ))}
-          </div>
-        )}
-        {picker === "date" && (
-          <div className="add-picker">
-            <input
-              type="date"
-              value={form.date}
-              onChange={(e) => {
-                setForm({ ...form, date: e.target.value });
-                setPicker("");
-              }}
-            />
-          </div>
-        )}
-        {picker === "note" && (
-          <div className="add-picker">
-            <input
-              autoFocus
-              value={form.note}
-              placeholder="午饭 / 客户尾款 / 水电…"
-              onChange={(e) => setForm({ ...form, note: e.target.value })}
-              onBlur={() => setPicker("")}
-            />
-          </div>
-        )}
-
-        <div className="num-pad" role="group" aria-label="数字键盘">
-          {["1", "2", "3", "4", "5", "6", "7", "8", "9", ".", "0", "back"].map((k) => (
-            <button key={k} type="button" className="num-key" onClick={() => tapKey(k)}>
-              {k === "back" ? <Icon name="backspace" size={22} /> : k}
+            )}
+            <button type="button" className="add-field-row" onClick={() => setPicker(picker === "date" ? "" : "date")}>
+              <Icon name="calendar-days" size={18} />
+              <span>日期</span>
+              <strong>{formatCnDate(form.date)}</strong>
+              <Icon name="chevron-right" size={15} />
             </button>
-          ))}
+            <div className="add-field-row static">
+              <Icon name="user" size={18} />
+              <span>记账成员</span>
+              <strong>
+                {me?.user?.display_name || "我"}
+                {me?.user ? "（我）" : ""}
+              </strong>
+            </div>
+            <button type="button" className="add-field-row" onClick={() => setPicker(picker === "note" ? "" : "note")}>
+              <Icon name="paperclip" size={18} />
+              <span>备注 / 附件</span>
+              <strong>{form.note || "添加备注"}</strong>
+              <Icon name="chevron-right" size={15} />
+            </button>
+          </div>
+
+          {picker === "ledger" && (
+            <div className="add-picker">
+              {ledgers.map((l) => (
+                <button
+                  key={l.id}
+                  type="button"
+                  className={String(form.ledger_id) === String(l.id) ? "on" : ""}
+                  onClick={() => {
+                    setForm({ ...form, ledger_id: l.id, category_id: "" });
+                    setPicker("");
+                    setMoreCats(false);
+                  }}
+                >
+                  <LedgerThumb ledger={l} size={22} /> {l.name}
+                </button>
+              ))}
+            </div>
+          )}
+          {(picker === "account" || picker === "transferTo") && (
+            <div className="add-picker">
+              {accounts.map((a) => (
+                <button
+                  key={a.id}
+                  type="button"
+                  className={
+                    String(picker === "transferTo" ? form.to_account_id : form.account_id) === String(a.id) ? "on" : ""
+                  }
+                  onClick={() => {
+                    if (picker === "transferTo") setForm({ ...form, to_account_id: a.id });
+                    else setForm({ ...form, account_id: a.id });
+                    setPicker("");
+                  }}
+                >
+                  {a.name} · {accountKindLabel(a.kind)}
+                </button>
+              ))}
+            </div>
+          )}
+          {picker === "date" && (
+            <div className="add-picker">
+              <input
+                type="date"
+                value={form.date}
+                onChange={(e) => {
+                  setForm({ ...form, date: e.target.value });
+                  setPicker("");
+                }}
+              />
+            </div>
+          )}
+          {picker === "note" && (
+            <div className="add-picker">
+              <input
+                autoFocus
+                value={form.note}
+                placeholder="午饭 / 客户尾款 / 水电…"
+                onChange={(e) => setForm({ ...form, note: e.target.value })}
+                onBlur={() => setPicker("")}
+              />
+            </div>
+          )}
+        </div>
+
+        <div className="add-sheet-dock">
+          <div className="num-pad" role="group" aria-label="数字键盘">
+            {["1", "2", "3", "4", "5", "6", "7", "8", "9", ".", "0", "back"].map((k) => (
+              <button key={k} type="button" className="num-key" onClick={() => tapKey(k)}>
+                {k === "back" ? <Icon name="backspace" size={20} /> : k}
+              </button>
+            ))}
+          </div>
+          <div className="add-page-foot dual">
+            <button type="button" className="btn secondary" disabled={saving} onClick={() => submit(true)}>
+              保存并再记
+            </button>
+            <button type="button" className="btn" disabled={saving} onClick={() => submit(false)}>
+              {saving ? "保存中…" : "保存账单"}
+            </button>
+          </div>
+          <p className="add-page-hint">草稿尚未计入收支 · 保存后自动同步家庭账本</p>
         </div>
       </div>
-
-      <div className="add-page-foot dual">
-        <button type="button" className="btn secondary" disabled={saving} onClick={() => submit(true)}>
-          保存并再记
-        </button>
-        <button type="button" className="btn" disabled={saving} onClick={() => submit(false)}>
-          {saving ? "保存中…" : "保存账单"}
-        </button>
-      </div>
-      <p className="add-page-hint">草稿尚未计入收支 · 保存后自动同步家庭账本</p>
     </div>
   );
 }
@@ -3199,7 +3267,7 @@ const LEDGER_TYPES = [
   ["family", "家庭公共"],
   ["business", "经营副业"],
 ];
-const LEDGER_ICONS = ["📒", "🏠", "👤", "💼", "🎨", "🍜", "🚗", "🎁", "💰", "🐾", "📚", "🌿"];
+const LEDGER_ICONS = LEDGER_ICON_KEYS;
 
 function SettingsPanel({ token, me, show, onMeUpdate, initialTab = "profile" }) {
   const [tab, setTab] = useState(initialTab);
@@ -3227,7 +3295,7 @@ function SettingsPanel({ token, me, show, onMeUpdate, initialTab = "profile" }) 
   const [ledgerForm, setLedgerForm] = useState({
     name: "",
     type: "personal",
-    icon: "📒",
+    icon: "notebook",
     description: "",
     include_in_family: true,
     owner_user_id: "",
@@ -3298,7 +3366,7 @@ function SettingsPanel({ token, me, show, onMeUpdate, initialTab = "profile" }) 
       setLedgerForm({
         name: "",
         type: "personal",
-        icon: "📒",
+        icon: "notebook",
         description: "",
         include_in_family: true,
         owner_user_id: "",
@@ -3726,10 +3794,11 @@ function SettingsPanel({ token, me, show, onMeUpdate, initialTab = "profile" }) 
                     <button
                       type="button"
                       key={ic}
-                      className={`chip ${ledgerForm.icon === ic ? "on" : ""}`}
+                      className={`chip icon-chip ${resolveLedgerIcon(ledgerForm.icon) === ic ? "on" : ""}`}
                       onClick={() => setLedgerForm({ ...ledgerForm, icon: ic })}
+                      aria-label={ic}
                     >
-                      {ic}
+                      <Icon name={ic} size={18} />
                     </button>
                   ))}
                 </div>
@@ -4003,10 +4072,11 @@ function SettingsPanel({ token, me, show, onMeUpdate, initialTab = "profile" }) 
                 <button
                   type="button"
                   key={ic}
-                  className={`chip ${editLedger.icon === ic ? "on" : ""}`}
+                  className={`chip icon-chip ${resolveLedgerIcon(editLedger.icon) === ic ? "on" : ""}`}
                   onClick={() => setEditLedger({ ...editLedger, icon: ic })}
+                  aria-label={ic}
                 >
-                  {ic}
+                  <Icon name={ic} size={18} />
                 </button>
               ))}
             </div>
