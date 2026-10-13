@@ -1202,7 +1202,8 @@ function CalendarPage({ token, me, show, go }) {
   const [filtersOpen, setFiltersOpen] = useState(false);
 
   const personQs = personId ? `&owner_user_id=${personId}` : "";
-  const visibleMembers = members.filter((m) => me?.user.role === "owner" || m.id === me?.user.id);
+  // 按记账人筛选：全家成员都可点选（不再按「账本归属 / 是否家长」裁剪）
+  const visibleMembers = members;
   const selectedPerson = members.find((m) => String(m.id) === String(personId));
 
   useEffect(() => {
@@ -1273,21 +1274,12 @@ function CalendarPage({ token, me, show, go }) {
       "limit=100",
       personId ? `owner_user_id=${personId}` : "",
       scope === "business" ? "ledger_type=business" : "",
+      scope === "family" ? "ledger_type=life" : "",
     ]
       .filter(Boolean)
       .join("&");
     api(`/api/v1/transactions?${qs}`, { token })
-      .then((rows) => {
-        if (!personId && scope === "family") {
-          setDayRows(rows.filter((t) => t.ledger_type !== "business"));
-        } else if (personId && scope === "family") {
-          setDayRows(rows.filter((t) => t.ledger_type !== "business"));
-        } else if (scope === "business") {
-          setDayRows(rows.filter((t) => t.ledger_type === "business"));
-        } else {
-          setDayRows(rows);
-        }
-      })
+      .then(setDayRows)
       .catch((err) => show(err.message));
   }, [token, year, month, selectedDay, scope, personId, mode, dayTick]);
 
@@ -1385,7 +1377,7 @@ function CalendarPage({ token, me, show, go }) {
               </FilterChip>
             ))}
           </FilterBar>
-          <FilterBar label="成员">
+          <FilterBar label="按记账人">
             <FilterChip active={!personId} onClick={() => setPersonId("")}>
               全家人
             </FilterChip>
@@ -1849,7 +1841,9 @@ function BillsList({ token, me, show, scope, filterText }) {
     const path =
       scope === "biz"
         ? "/api/v1/transactions?limit=80&ledger_type=business"
-        : "/api/v1/transactions?limit=80";
+        : scope === "life"
+          ? "/api/v1/transactions?limit=80&ledger_type=life"
+          : "/api/v1/transactions?limit=80";
     return api(path, { token }).then(setRows);
   }
 
@@ -1882,7 +1876,6 @@ function BillsList({ token, me, show, scope, filterText }) {
   }
 
   const filtered = rows.filter((t) => {
-    if (scope === "life" && t.ledger_type === "business") return false;
     if (!filterText?.trim()) return true;
     const hay = `${t.note || ""}${t.category_name || ""}${t.ledger_name || ""}${t.user_name || ""}`.toLowerCase();
     return hay.includes(filterText.trim().toLowerCase());
@@ -1920,22 +1913,29 @@ function StatsPage({ token, me, go, show }) {
   const [book, setBook] = useState("life"); // life | biz
   const [kind, setKind] = useState("expense"); // expense | income
   const [range, setRange] = useState("month"); // month | year
-  const year = dash?.period?.year || now.getFullYear();
-  const month = dash?.period?.month || now.getMonth() + 1;
+  const [viewYear, setViewYear] = useState(now.getFullYear());
+  const [viewMonth, setViewMonth] = useState(now.getMonth() + 1);
+  const isYear = range === "year";
+  const year = viewYear;
+  const month = viewMonth;
 
   useEffect(() => {
-    api("/api/v1/dashboard", { token })
+    const g = isYear ? "year" : "month";
+    const qs = isYear
+      ? `year=${viewYear}&granularity=year`
+      : `year=${viewYear}&month=${viewMonth}&granularity=month`;
+    api(`/api/v1/dashboard?${qs}`, { token })
       .then(setDash)
       .catch((e) => show(e.message));
-  }, [token, show]);
+  }, [token, show, isYear, viewYear, viewMonth]);
 
   useEffect(() => {
-    if (!dash) return;
+    if (!dash || isYear) return;
     const scope = book === "biz" ? "business" : "family";
     api(`/api/v1/calendar/month?year=${year}&month=${month}&scope=${scope}`, { token })
       .then(setMonthCal)
       .catch(() => setMonthCal(null));
-  }, [token, dash, book, year, month]);
+  }, [token, dash, book, year, month, isYear]);
 
   if (!dash) return <p className="muted">正在汇总统计…</p>;
 
@@ -1972,6 +1972,23 @@ function StatsPage({ token, me, go, show }) {
   }
   const avgDay = todayCap > 0 ? sumDays / todayCap : 0;
 
+  const monthlyBars = (dash.trend || []).map((t) => ({
+    month: t.month,
+    label: t.label,
+    expense: t.expense || 0,
+    income: t.income || 0,
+    value: isExpense ? t.expense || 0 : t.income || 0,
+  }));
+  const monthCap = isYear && year === now.getFullYear() ? now.getMonth() + 1 : 12;
+  const monthlyShown = isYear ? monthlyBars.filter((t) => t.month <= monthCap) : monthlyBars;
+  let maxMonth = { month: 1, value: 0 };
+  let sumMonths = 0;
+  monthlyShown.forEach((t) => {
+    sumMonths += t.value;
+    if (t.value >= maxMonth.value) maxMonth = { month: t.month, value: t.value };
+  });
+  const avgMonth = monthlyShown.length > 0 ? sumMonths / monthlyShown.length : 0;
+
   const members = (dash.members || [])
     .map((m) => ({
       name: m.display_name,
@@ -1979,6 +1996,15 @@ function StatsPage({ token, me, go, show }) {
     }))
     .sort((a, b) => b.value - a.value);
   const memberMax = Math.max(...members.map((m) => m.value), 1);
+
+  const periodLabel = isYear ? `${year}年` : `${year}年${month}月`;
+  const totalLabel = isExpense
+    ? isYear
+      ? "本年累计支出"
+      : "本月累计支出"
+    : isYear
+      ? "本年累计收入"
+      : "本月累计收入";
 
   return (
     <div className="stats-page">
@@ -1995,9 +2021,51 @@ function StatsPage({ token, me, go, show }) {
       </div>
 
       <div className="stats-range-row">
-        <button type="button" className="stats-month-btn">
-          {year}年{month}月 ⌄
-        </button>
+        <div className="stats-period-nav">
+          <button
+            type="button"
+            className="text-link"
+            aria-label="上一段"
+            onClick={() => {
+              if (isYear) setViewYear((y) => y - 1);
+              else {
+                let m = viewMonth - 1;
+                let y = viewYear;
+                if (m < 1) {
+                  m = 12;
+                  y -= 1;
+                }
+                setViewMonth(m);
+                setViewYear(y);
+              }
+            }}
+          >
+            ‹
+          </button>
+          <button type="button" className="stats-month-btn">
+            {periodLabel}
+          </button>
+          <button
+            type="button"
+            className="text-link"
+            aria-label="下一段"
+            onClick={() => {
+              if (isYear) setViewYear((y) => y + 1);
+              else {
+                let m = viewMonth + 1;
+                let y = viewYear;
+                if (m > 12) {
+                  m = 1;
+                  y += 1;
+                }
+                setViewMonth(m);
+                setViewYear(y);
+              }
+            }}
+          >
+            ›
+          </button>
+        </div>
         <div className="stats-range-tabs">
           {[
             ["month", "月度"],
@@ -2014,7 +2082,6 @@ function StatsPage({ token, me, go, show }) {
                   return;
                 }
                 setRange(id);
-                if (id === "year") show("年度视图：当前展示本月明细，年汇总可看下方趋势");
               }}
             >
               {label}
@@ -2044,10 +2111,10 @@ function StatsPage({ token, me, go, show }) {
       <section className="card stats-donut-card">
         <div className="stats-donut-top">
           <div>
-            <p className="kl">{isExpense ? "本月累计支出" : "本月累计收入"}</p>
+            <p className="kl">{totalLabel}</p>
             <p className="stats-big-amt">¥{money(total)}</p>
           </div>
-          <span className="stats-pill">截至{todayCap}日</span>
+          <span className="stats-pill">{isYear ? `${year}全年` : `截至${todayCap}日`}</span>
         </div>
 
         {isExpense && isLife && cats.length > 0 ? (
@@ -2093,14 +2160,14 @@ function StatsPage({ token, me, go, show }) {
           <p className="muted" style={{ margin: "8px 0 0" }}>
             {isExpense
               ? isLife
-                ? "本月还没有支出分类数据。"
+                ? `${isYear ? "本年" : "本月"}还没有支出分类数据。`
                 : `经营实付 ¥${money(dash.business.expense)}，毛利 ¥${money(dash.business.profit)}。`
-              : `本月${isLife ? "生活" : "经营"}收入 ¥${money(total)}。`}
+              : `${isYear ? "本年" : "本月"}${isLife ? "生活" : "经营"}收入 ¥${money(total)}。`}
           </p>
         )}
       </section>
 
-      {isExpense && (
+      {isExpense && !isYear && (
         <section className="card stats-trend-card">
           <div className="h-row">
             <span className="stats-card-title">每日支出趋势</span>
@@ -2140,12 +2207,62 @@ function StatsPage({ token, me, go, show }) {
         </section>
       )}
 
+      {isYear && (
+        <section className="card stats-trend-card">
+          <div className="h-row">
+            <span className="stats-card-title">{isExpense ? "每月支出" : "每月收入"}</span>
+            <span className="text-link" style={{ cursor: "default" }}>
+              1–{monthCap}月
+            </span>
+          </div>
+          <div className="stats-bar-wrap">
+            <ResponsiveContainer width="100%" height={110}>
+              <BarChart data={monthlyShown} margin={{ top: 4, right: 0, left: 0, bottom: 0 }}>
+                <XAxis dataKey="month" tick={{ fontSize: 9, fill: "#aba8ba" }} axisLine={false} tickLine={false} />
+                <Tooltip formatter={(v) => [`¥${money(v)}`, isExpense ? "支出" : "收入"]} />
+                <Bar dataKey="value" radius={[3, 3, 0, 0]} maxBarSize={18}>
+                  {monthlyShown.map((d) => (
+                    <Cell key={d.month} fill={d.month === monthCap ? "#8270d8" : "#cbc2ef"} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+          <div className="stats-trend-foot">
+            <span>月均 ¥{money(avgMonth)}</span>
+            <span>
+              最高 {maxMonth.month}月 · ¥{money(maxMonth.value)}
+            </span>
+          </div>
+        </section>
+      )}
+
+      {isYear && isLife && (
+        <section className="card" style={{ padding: 18, marginTop: 14 }}>
+          <h3 className="stats-card-title" style={{ marginTop: 0 }}>
+            {year}年收支走势
+          </h3>
+          <div className="chart-box" style={{ height: 180 }}>
+            <ResponsiveContainer>
+              <AreaChart data={monthlyShown}>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(70,55,110,0.08)" />
+                <XAxis dataKey="label" tick={{ fontSize: 11 }} />
+                <YAxis tick={{ fontSize: 11 }} width={36} />
+                <Tooltip />
+                <Area type="monotone" dataKey="income" stroke="#8270d8" fill="#f0ecfc" name="收入" />
+                <Area type="monotone" dataKey="expense" stroke="#d5879f" fill="#fce8ef" name="支出" />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </section>
+      )}
+
       {isLife && (
         <>
           <div className="h-row stats-section-title">
             <span className="stats-card-title">家庭成员消费</span>
-            <span className="text-link" style={{ cursor: "default" }}>
-              仅生活账
+            <span className="muted" style={{ fontSize: "0.75rem" }}>
+              按记账人 · 合计 ¥{money(members.reduce((s, m) => s + (m.value || 0), 0))}
             </span>
           </div>
           <section className="card stats-member-card">
@@ -2175,26 +2292,6 @@ function StatsPage({ token, me, go, show }) {
           <button type="button" className="btn" style={{ marginTop: 8 }} onClick={() => go("biz")}>
             打开经营副业
           </button>
-        </section>
-      )}
-
-      {range === "year" && isLife && (
-        <section className="card" style={{ padding: 18, marginTop: 14 }}>
-          <h3 className="stats-card-title" style={{ marginTop: 0 }}>
-            近半年收支
-          </h3>
-          <div className="chart-box" style={{ height: 180 }}>
-            <ResponsiveContainer>
-              <AreaChart data={dash.trend}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(70,55,110,0.08)" />
-                <XAxis dataKey="label" tick={{ fontSize: 11 }} />
-                <YAxis tick={{ fontSize: 11 }} width={36} />
-                <Tooltip />
-                <Area type="monotone" dataKey="income" stroke="#8270d8" fill="#f0ecfc" name="收入" />
-                <Area type="monotone" dataKey="expense" stroke="#d5879f" fill="#fce8ef" name="支出" />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
         </section>
       )}
     </div>
@@ -2679,17 +2776,19 @@ function todayIso() {
 }
 
 function emptyAddForm(partial = {}) {
-  return {
+  const base = {
     type: "expense",
     amount: "",
     note: "",
     ledger_id: "",
     account_id: "",
-    to_account_id: "",
     category_id: "",
     date: todayIso(),
     ...partial,
   };
+  // 历史草稿可能带 transfer，统一落回支出
+  if (base.type === "transfer") base.type = "expense";
+  return base;
 }
 
 function AddSuccess({ me, saved, onAgain, onBills, onHome }) {
@@ -2763,7 +2862,7 @@ function AddSheet({ token, me, show, onClose, onGoBills }) {
   const [accounts, setAccounts] = useState([]);
   const [cats, setCats] = useState([]);
   const [form, setForm] = useState(() => emptyAddForm());
-  const [picker, setPicker] = useState(""); // account | date | ledger | note | transferTo
+  const [picker, setPicker] = useState(""); // account | date | ledger | note
   const [moreCats, setMoreCats] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(null);
@@ -2790,7 +2889,6 @@ function AddSheet({ token, me, show, onClose, onGoBills }) {
           ...(draft || {}),
           ledger_id: draft?.ledger_id || l.find((x) => x.type !== "business")?.id || l[0]?.id || "",
           account_id: draft?.account_id || a[0]?.id || "",
-          to_account_id: draft?.to_account_id || a[1]?.id || a[0]?.id || "",
           date: draft?.date || todayIso(),
         })
       );
@@ -2799,7 +2897,6 @@ function AddSheet({ token, me, show, onClose, onGoBills }) {
 
   const ledger = ledgers.find((l) => String(l.id) === String(form.ledger_id));
   const isBiz = ledger?.type === "business";
-  const isTransfer = form.type === "transfer";
   const filteredCats = cats.filter(
     (c) => c.kind === (form.type === "income" ? "income" : "expense") && (!ledger || c.ledger_type === ledger.type)
   );
@@ -2814,10 +2911,8 @@ function AddSheet({ token, me, show, onClose, onGoBills }) {
   const selectedCat =
     filteredCats.find((c) => String(c.id) === String(form.category_id)) || visibleCats[0] || filteredCats[0];
   const account = accounts.find((a) => String(a.id) === String(form.account_id));
-  const toAccount = accounts.find((a) => String(a.id) === String(form.to_account_id));
-  const amountLabel =
-    form.type === "income" ? "收入金额（元）" : form.type === "transfer" ? "转账金额（元）" : "支出金额（元）";
-  const typeLabel = form.type === "income" ? "收入" : form.type === "transfer" ? "转账" : "支出";
+  const amountLabel = form.type === "income" ? "收入金额（元）" : "支出金额（元）";
+  const typeLabel = form.type === "income" ? "收入" : "支出";
   const draftHint = `${me?.household?.name || "家庭"} · ${isBiz ? "经营账" : "生活账"} · ${typeLabel}草稿`;
 
   function tapKey(key) {
@@ -2846,8 +2941,7 @@ function AddSheet({ token, me, show, onClose, onGoBills }) {
       emptyAddForm({
         ledger_id: f.ledger_id,
         account_id: f.account_id,
-        to_account_id: f.to_account_id,
-        type: f.type === "transfer" ? "expense" : f.type,
+        type: f.type,
       })
     );
     setSaved(null);
@@ -2856,85 +2950,36 @@ function AddSheet({ token, me, show, onClose, onGoBills }) {
   }
 
   async function submit(keepGoing) {
-    if (isTransfer) {
-      show("转账将记为两笔流水，请确认转出与转入账户不同");
-      if (!form.account_id || !form.to_account_id || String(form.account_id) === String(form.to_account_id)) {
-        show("请选择不同的转出与转入账户");
-        return;
-      }
-    }
     const amt = Number(form.amount);
     if (!(amt > 0)) {
       show("请输入大于 0 的金额");
       return;
     }
-    if (!isTransfer && !selectedCat) {
+    if (!selectedCat) {
       show("请选择分类");
       return;
     }
     setSaving(true);
     try {
-      if (isTransfer) {
-        const transferCat =
-          cats.find((c) => c.name.includes("其他") && c.kind === "expense") ||
-          cats.find((c) => c.kind === "expense");
-        const incomeCat =
-          cats.find((c) => c.name.includes("其他") && c.kind === "income") ||
-          cats.find((c) => c.kind === "income");
-        await api("/api/v1/transactions", {
-          token,
-          method: "POST",
-          body: {
-            type: "expense",
-            amount: amt,
-            note: form.note || "账户转出",
-            ledger_id: Number(form.ledger_id),
-            account_id: Number(form.account_id),
-            category_id: Number(transferCat?.id),
-            occurred_at: `${form.date}T12:00:00`,
-          },
-        });
-        const created = await api("/api/v1/transactions", {
-          token,
-          method: "POST",
-          body: {
-            type: "income",
-            amount: amt,
-            note: form.note || "账户转入",
-            ledger_id: Number(form.ledger_id),
-            account_id: Number(form.to_account_id),
-            category_id: Number(incomeCat?.id),
-            occurred_at: `${form.date}T12:00:00`,
-          },
-        });
-        localStorage.removeItem(DRAFT_KEY);
-        if (keepGoing) {
-          show("转账已保存。继续记账会新建一笔。");
-          resetFormKeepMeta();
-        } else {
-          setSaved({ ...created, type: "expense", note: form.note || "账户转账", amount: amt });
-        }
+      const created = await api("/api/v1/transactions", {
+        token,
+        method: "POST",
+        body: {
+          type: form.type,
+          amount: amt,
+          note: form.note,
+          ledger_id: Number(form.ledger_id),
+          account_id: Number(form.account_id),
+          category_id: Number(form.category_id || selectedCat?.id),
+          occurred_at: `${form.date}T12:00:00`,
+        },
+      });
+      localStorage.removeItem(DRAFT_KEY);
+      if (keepGoing) {
+        show("已保存。继续记账会新建一笔。");
+        resetFormKeepMeta();
       } else {
-        const created = await api("/api/v1/transactions", {
-          token,
-          method: "POST",
-          body: {
-            type: form.type,
-            amount: amt,
-            note: form.note,
-            ledger_id: Number(form.ledger_id),
-            account_id: Number(form.account_id),
-            category_id: Number(form.category_id || selectedCat?.id),
-            occurred_at: `${form.date}T12:00:00`,
-          },
-        });
-        localStorage.removeItem(DRAFT_KEY);
-        if (keepGoing) {
-          show("已保存。继续记账会新建一笔。");
-          resetFormKeepMeta();
-        } else {
-          setSaved(created);
-        }
+        setSaved(created);
       }
     } catch (err) {
       show(err.message);
@@ -2991,7 +3036,6 @@ function AddSheet({ token, me, show, onClose, onGoBills }) {
             options={[
               ["expense", "支出"],
               ["income", "收入"],
-              ["transfer", "转账"],
             ]}
             onChange={(type) => setForm({ ...form, type, category_id: "" })}
           />
@@ -3004,70 +3048,54 @@ function AddSheet({ token, me, show, onClose, onGoBills }) {
             </div>
           </div>
 
-          {!isTransfer && (
-            <div className="cat-grid add-cat-grid">
-              {visibleCats.map((c) => {
-                const on = String(selectedCat?.id) === String(c.id);
-                return (
-                  <button
-                    key={c.id}
-                    type="button"
-                    className={`cat-tile ${on ? "on" : ""}`}
-                    onClick={() => setForm({ ...form, category_id: c.id })}
-                  >
-                    <span className="cat-tile-icon">
-                      <CategoryIcon name={c.name} emoji={c.icon} size={22} />
-                    </span>
-                    <span className="cat-tile-label">{categoryLabel(c.name)}</span>
-                  </button>
-                );
-              })}
-              {!moreCats && extraCats.length > 0 && (
-                <button type="button" className="cat-tile" onClick={() => setMoreCats(true)}>
+          <div className="cat-grid add-cat-grid">
+            {visibleCats.map((c) => {
+              const on = String(selectedCat?.id) === String(c.id);
+              return (
+                <button
+                  key={c.id}
+                  type="button"
+                  className={`cat-tile ${on ? "on" : ""}`}
+                  onClick={() => setForm({ ...form, category_id: c.id })}
+                >
                   <span className="cat-tile-icon">
-                    <Icon name="ellipsis" size={22} />
+                    <CategoryIcon name={c.name} emoji={c.icon} size={20} />
                   </span>
-                  <span className="cat-tile-label">更多分类</span>
+                  <span className="cat-tile-label">{categoryLabel(c.name)}</span>
                 </button>
-              )}
-            </div>
-          )}
-
-          <div className="add-info-card">
-            {!isTransfer && (
-              <button
-                type="button"
-                className="add-field-row"
-                onClick={() => setPicker(picker === "ledger" ? "" : "ledger")}
-              >
-                <Icon name="notebook" size={18} />
-                <span>账本</span>
-                <strong>{ledger?.name || "选择账本"}</strong>
-                <Icon name="chevron-right" size={15} />
+              );
+            })}
+            {!moreCats && extraCats.length > 0 && (
+              <button type="button" className="cat-tile" onClick={() => setMoreCats(true)}>
+                <span className="cat-tile-icon">
+                  <Icon name="ellipsis" size={20} />
+                </span>
+                <span className="cat-tile-label">更多分类</span>
               </button>
             )}
+          </div>
+
+          <div className="add-info-card">
+            <button
+              type="button"
+              className="add-field-row"
+              onClick={() => setPicker(picker === "ledger" ? "" : "ledger")}
+            >
+              <Icon name="notebook" size={18} />
+              <span>账本</span>
+              <strong>{ledger?.name || "选择账本"}</strong>
+              <Icon name="chevron-right" size={15} />
+            </button>
             <button
               type="button"
               className="add-field-row"
               onClick={() => setPicker(picker === "account" ? "" : "account")}
             >
               <Icon name="wallet" size={18} />
-              <span>{form.type === "income" ? "收款账户" : isTransfer ? "转出账户" : "付款账户"}</span>
+              <span>{form.type === "income" ? "收款账户" : "付款账户"}</span>
               <strong>{account ? `${account.name}` : "选择账户"}</strong>
               <Icon name="chevron-right" size={15} />
             </button>
-            {isTransfer && (
-              <button
-                type="button"
-                className="add-field-row"
-                onClick={() => setPicker(picker === "transferTo" ? "" : "transferTo")}
-              >
-                <Icon name="wallet" size={18} />
-                <span>转入账户</span>
-                <strong>{toAccount ? `${toAccount.name}` : "选择账户"}</strong>
-                <Icon name="chevron-right" size={15} />
-              </button>
-            )}
             <button type="button" className="add-field-row" onClick={() => setPicker(picker === "date" ? "" : "date")}>
               <Icon name="calendar-days" size={18} />
               <span>日期</span>
@@ -3108,18 +3136,15 @@ function AddSheet({ token, me, show, onClose, onGoBills }) {
               ))}
             </div>
           )}
-          {(picker === "account" || picker === "transferTo") && (
+          {picker === "account" && (
             <div className="add-picker">
               {accounts.map((a) => (
                 <button
                   key={a.id}
                   type="button"
-                  className={
-                    String(picker === "transferTo" ? form.to_account_id : form.account_id) === String(a.id) ? "on" : ""
-                  }
+                  className={String(form.account_id) === String(a.id) ? "on" : ""}
                   onClick={() => {
-                    if (picker === "transferTo") setForm({ ...form, to_account_id: a.id });
-                    else setForm({ ...form, account_id: a.id });
+                    setForm({ ...form, account_id: a.id });
                     setPicker("");
                   }}
                 >
@@ -3151,16 +3176,17 @@ function AddSheet({ token, me, show, onClose, onGoBills }) {
               />
             </div>
           )}
-        </div>
 
-        <div className="add-sheet-dock">
-          <div className="num-pad" role="group" aria-label="数字键盘">
+          <div className="num-pad add-num-pad-inline" role="group" aria-label="数字键盘">
             {["1", "2", "3", "4", "5", "6", "7", "8", "9", ".", "0", "back"].map((k) => (
               <button key={k} type="button" className="num-key" onClick={() => tapKey(k)}>
                 {k === "back" ? <Icon name="backspace" size={20} /> : k}
               </button>
             ))}
           </div>
+        </div>
+
+        <div className="add-sheet-dock add-sheet-dock-compact">
           <div className="add-page-foot dual">
             <button type="button" className="btn secondary" disabled={saving} onClick={() => submit(true)}>
               保存并再记

@@ -286,13 +286,15 @@ def tx_out(tx: Transaction, db: Session) -> dict:
 
 
 def can_see_ledger(user: User, ledger: Ledger) -> bool:
+    """家庭成员可查看：家庭账、经营账、自己的个人账，以及计入家庭总览的他人个人账。"""
     if user.role == "owner":
         return True
-    if ledger.type == "family":
+    if ledger.type in ("family", "business"):
         return True
-    if ledger.type == "business":
+    if ledger.owner_user_id == user.id:
         return True
-    return ledger.owner_user_id == user.id
+    # 计入家庭总览的个人账，全家可见（与统计「生活账」口径一致）
+    return bool(ledger.include_in_family)
 
 
 def can_write(user: User) -> bool:
@@ -582,18 +584,34 @@ def remove_ledger(ledger_id: int, user: User = Depends(current_user), db: Sessio
 
 @app.get("/api/v1/accounts")
 def accounts(user: User = Depends(current_user), db: Session = Depends(get_db)):
+    """与流水可见范围对齐：能看生活账则看生活账户；能看经营账则看经营账户。"""
     rows = db.query(Account).filter(Account.household_id == user.household_id).all()
-    return [
-        {
-            "id": a.id,
-            "name": a.name,
-            "kind": a.kind,
-            "opening_balance": a.opening_balance,
-            "owner_user_id": a.owner_user_id,
-            "ledger_id": a.ledger_id,
-        }
-        for a in rows
-    ]
+    can_life = bool(_life_ledger_ids(db, user))
+    can_biz = bool(_visible_ledger_ids(db, user, "business"))
+    visible_lids = set(_visible_ledger_ids(db, user, "all"))
+    out = []
+    for a in rows:
+        if a.kind == "business":
+            if not can_biz:
+                continue
+        else:
+            if not can_life:
+                # 无生活账可见时，仅自己的账户
+                if a.owner_user_id not in (None, user.id):
+                    continue
+            elif a.ledger_id and a.ledger_id not in visible_lids:
+                continue
+        out.append(
+            {
+                "id": a.id,
+                "name": a.name,
+                "kind": a.kind,
+                "opening_balance": a.opening_balance,
+                "owner_user_id": a.owner_user_id,
+                "ledger_id": a.ledger_id,
+            }
+        )
+    return out
 
 
 ALLOWED_ACCOUNT_KINDS = {"cash", "bank", "ewallet", "credit", "business"}
@@ -723,30 +741,33 @@ def list_tx(
         q = q.filter(Transaction.occurred_at >= start, Transaction.occurred_at < end)
     if ledger_id:
         q = q.filter(Transaction.ledger_id == ledger_id)
-    if ledger_type:
+    if ledger_type in ("life", "living", "family_life"):
+        q = q.filter(Transaction.ledger_id.in_(_life_ledger_ids(db, user) or [0]))
+    elif ledger_type == "family":
+        # 兼容旧参数：按生活账口径（计入家庭总览），不是仅 type=family
+        q = q.filter(Transaction.ledger_id.in_(_life_ledger_ids(db, user) or [0]))
+    elif ledger_type:
         ids = [
             l.id
             for l in db.query(Ledger).filter(
                 Ledger.household_id == user.household_id, Ledger.type == ledger_type
             )
-        ]
-        q = q.filter(Transaction.ledger_id.in_(ids or [0]))
-    if user_id:
-        if user.role != "owner" and user_id != user.id:
-            raise HTTPException(403, "只能查看自己的个人明细")
-        q = q.filter(Transaction.user_id == user_id)
-    if owner_user_id is not None:
-        lids = _visible_ledger_ids(db, user, "all", owner_user_id)
-        q = q.filter(Transaction.ledger_id.in_(lids or [0]))
-    if tx_type:
-        q = q.filter(Transaction.type == tx_type)
-    if user.role != "owner":
-        visible = [
-            l.id
-            for l in db.query(Ledger).filter(Ledger.household_id == user.household_id)
             if can_see_ledger(user, l)
         ]
-        q = q.filter(Transaction.ledger_id.in_(visible or [0]))
+        q = q.filter(Transaction.ledger_id.in_(ids or [0]))
+    # user_id / owner_user_id：均按「记账人」过滤（日历按成员与此对齐）
+    recorder_id = user_id if user_id is not None else owner_user_id
+    if recorder_id is not None:
+        _assert_same_household_member(db, user, recorder_id)
+        q = q.filter(Transaction.user_id == recorder_id)
+    if tx_type:
+        q = q.filter(Transaction.type == tx_type)
+    visible = [
+        l.id
+        for l in db.query(Ledger).filter(Ledger.household_id == user.household_id)
+        if can_see_ledger(user, l)
+    ]
+    q = q.filter(Transaction.ledger_id.in_(visible or [0]))
     rows = q.order_by(Transaction.occurred_at.desc()).limit(limit).all()
     return [tx_out(t, db) for t in rows]
 
@@ -811,23 +832,42 @@ def delete_tx(tx_id: int, user: User = Depends(current_user), db: Session = Depe
     return {"ok": True}
 
 
+def _life_ledger_ids(db: Session, user: User) -> list[int]:
+    """生活账统一口径：计入家庭总览、且非经营账。"""
+    rows = db.query(Ledger).filter(Ledger.household_id == user.household_id).all()
+    return [
+        l.id
+        for l in rows
+        if l.include_in_family and l.type != "business" and can_see_ledger(user, l)
+    ]
+
+
 def _visible_ledger_ids(
     db: Session, user: User, scope: str = "all", owner_user_id: int | None = None
 ) -> list[int]:
+    """
+    返回可见账本 ID。
+    owner_user_id 不再按「账本归属」裁剪，改由日历/流水按 Transaction.user_id（记账人）过滤。
+    scope=family 与 dashboard 生活账口径一致（include_in_family）。
+    """
     rows = db.query(Ledger).filter(Ledger.household_id == user.household_id).all()
     visible = [l for l in rows if can_see_ledger(user, l)]
     if owner_user_id is not None:
         target = db.get(User, owner_user_id)
         if not target or target.household_id != user.household_id:
             raise HTTPException(404, "成员不存在")
-        if user.role != "owner" and owner_user_id != user.id:
-            raise HTTPException(403, "只能查看自己的个人账本")
-        visible = [l for l in visible if l.owner_user_id == owner_user_id]
     if scope == "family":
-        return [l.id for l in visible if l.type != "business"]
+        return [l.id for l in visible if l.include_in_family and l.type != "business"]
     if scope == "business":
         return [l.id for l in visible if l.type == "business"]
     return [l.id for l in visible]
+
+
+def _assert_same_household_member(db: Session, user: User, member_id: int) -> User:
+    target = db.get(User, member_id)
+    if not target or target.household_id != user.household_id:
+        raise HTTPException(404, "成员不存在")
+    return target
 
 
 def _calendar_person(db: Session, owner_user_id: int | None) -> dict | None:
@@ -855,19 +895,19 @@ def calendar_month(
     if month < 1 or month > 12:
         raise HTTPException(400, "月份无效")
     start, end = month_range(year, month)
-    lids = _visible_ledger_ids(db, user, scope, owner_user_id)
+    lids = _visible_ledger_ids(db, user, scope)
     days_map: dict[str, dict] = {}
     if lids:
-        rows = (
-            db.query(Transaction)
-            .filter(
-                Transaction.household_id == user.household_id,
-                Transaction.ledger_id.in_(lids),
-                Transaction.occurred_at >= start,
-                Transaction.occurred_at < end,
-            )
-            .all()
+        q = db.query(Transaction).filter(
+            Transaction.household_id == user.household_id,
+            Transaction.ledger_id.in_(lids),
+            Transaction.occurred_at >= start,
+            Transaction.occurred_at < end,
         )
+        if owner_user_id is not None:
+            _assert_same_household_member(db, user, owner_user_id)
+            q = q.filter(Transaction.user_id == owner_user_id)
+        rows = q.all()
         for tx in rows:
             key = tx.occurred_at.strftime("%Y-%m-%d")
             cell = days_map.setdefault(
@@ -911,17 +951,24 @@ def calendar_year(
     user: User = Depends(current_user),
     db: Session = Depends(get_db),
 ):
-    """按月汇总：一年里各月收支一眼看完。"""
+    """按月汇总：一年里各月收支一眼看完。owner_user_id 按记账人过滤。"""
     now = datetime.now()
     year = year or now.year
-    lids = _visible_ledger_ids(db, user, scope, owner_user_id)
+    lids = _visible_ledger_ids(db, user, scope)
+    if owner_user_id is not None:
+        _assert_same_household_member(db, user, owner_user_id)
     months = []
     year_income = 0.0
     year_expense = 0.0
+    hid = user.household_id
     for m in range(1, 13):
         s, e = month_range(year, m)
-        income = _sum(db, user.household_id, lids, s, e, "income")
-        expense = _sum(db, user.household_id, lids, s, e, "expense")
+        if owner_user_id is not None:
+            income = _sum_by_user(db, hid, lids, s, e, "income", owner_user_id)
+            expense = _sum_by_user(db, hid, lids, s, e, "expense", owner_user_id)
+        else:
+            income = _sum(db, hid, lids, s, e, "income")
+            expense = _sum(db, hid, lids, s, e, "expense")
         year_income += income
         year_expense += expense
         months.append(
@@ -963,24 +1010,58 @@ def _sum(db: Session, hid: int, ledger_ids: list[int], start: datetime, end: dat
     return float(val)
 
 
+def _sum_by_user(
+    db: Session,
+    hid: int,
+    ledger_ids: list[int],
+    start: datetime,
+    end: datetime,
+    tx_type: str,
+    user_id: int,
+):
+    """按记账人汇总，口径与 _sum 的账本范围保持一致。"""
+    if not ledger_ids:
+        return 0.0
+    val = (
+        db.query(func.coalesce(func.sum(Transaction.amount), 0.0))
+        .filter(
+            Transaction.household_id == hid,
+            Transaction.ledger_id.in_(ledger_ids),
+            Transaction.user_id == user_id,
+            Transaction.type == tx_type,
+            Transaction.occurred_at >= start,
+            Transaction.occurred_at < end,
+        )
+        .scalar()
+    )
+    return float(val)
+
+
 @app.get("/api/v1/dashboard")
 def dashboard(
     year: Optional[int] = None,
     month: Optional[int] = None,
+    granularity: str = "month",
     user: User = Depends(current_user),
     db: Session = Depends(get_db),
 ):
     now = datetime.now()
     year = year or now.year
     month = month or now.month
+    is_year = granularity == "year"
     hid = user.household_id
-    start, end = month_range(year, month)
+    if is_year:
+        start, end = datetime(year, 1, 1), datetime(year + 1, 1, 1)
+    else:
+        start, end = month_range(year, month)
     all_ledgers = db.query(Ledger).filter(Ledger.household_id == hid).all()
-    # 经营账永远不进家庭总额；仅 include_in_family 且非 business 的账本计入生活统计
+    # 生活账统一口径：include_in_family 且非经营；成员侧再按 can_see 裁剪
     family_ids = [
-        l.id for l in all_ledgers if l.include_in_family and l.type != "business"
+        l.id
+        for l in all_ledgers
+        if l.include_in_family and l.type != "business" and can_see_ledger(user, l)
     ]
-    biz_ids = [l.id for l in all_ledgers if l.type == "business"]
+    biz_ids = [l.id for l in all_ledgers if l.type == "business" and can_see_ledger(user, l)]
     personal_mine = [l.id for l in all_ledgers if l.type == "personal" and l.owner_user_id == user.id]
 
     family_income = _sum(db, hid, family_ids, start, end, "income")
@@ -993,19 +1074,19 @@ def dashboard(
     members = db.query(User).filter(User.household_id == hid).all()
     member_stats = []
     for m in members:
-        lids = [l.id for l in all_ledgers if l.type == "personal" and l.owner_user_id == m.id]
+        # 与 family 总额同一账本范围，按「谁记的」拆分，避免家庭公共账对不上
         member_stats.append(
             {
                 "user_id": m.id,
                 "display_name": m.display_name,
                 "avatar_color": m.avatar_color,
                 "avatar_url": media_url(getattr(m, "avatar_path", "") or ""),
-                "expense": _sum(db, hid, lids, start, end, "expense"),
-                "income": _sum(db, hid, lids, start, end, "income"),
+                "expense": _sum_by_user(db, hid, family_ids, start, end, "expense", m.id),
+                "income": _sum_by_user(db, hid, family_ids, start, end, "income", m.id),
             }
         )
 
-    # category pie: family-included expenses
+    # category pie: family-included expenses（月度/年度同一口径）
     cat_rows = (
         db.query(Category.name, Category.icon, Category.color, func.sum(Transaction.amount))
         .join(Transaction, Transaction.category_id == Category.id)
@@ -1024,21 +1105,34 @@ def dashboard(
     ]
 
     trend = []
-    base = year * 12 + (month - 1)
-    for i in range(5, -1, -1):
-        m_index = base - i
-        y, mth = divmod(m_index, 12)
-        mth += 1
-        s, e = month_range(y, mth)
-        trend.append(
-            {
-                "label": f"{mth}月",
-                "year": y,
-                "month": mth,
-                "income": _sum(db, hid, family_ids, s, e, "income"),
-                "expense": _sum(db, hid, family_ids, s, e, "expense"),
-            }
-        )
+    if is_year:
+        for mth in range(1, 13):
+            s, e = month_range(year, mth)
+            trend.append(
+                {
+                    "label": f"{mth}月",
+                    "year": year,
+                    "month": mth,
+                    "income": _sum(db, hid, family_ids, s, e, "income"),
+                    "expense": _sum(db, hid, family_ids, s, e, "expense"),
+                }
+            )
+    else:
+        base = year * 12 + (month - 1)
+        for i in range(5, -1, -1):
+            m_index = base - i
+            y, mth = divmod(m_index, 12)
+            mth += 1
+            s, e = month_range(y, mth)
+            trend.append(
+                {
+                    "label": f"{mth}月",
+                    "year": y,
+                    "month": mth,
+                    "income": _sum(db, hid, family_ids, s, e, "income"),
+                    "expense": _sum(db, hid, family_ids, s, e, "expense"),
+                }
+            )
 
     budgets = db.query(Budget).filter(Budget.household_id == hid, Budget.year == year, Budget.month == month).all()
     budget_out = []
@@ -1096,7 +1190,7 @@ def dashboard(
     )
 
     return {
-        "period": {"year": year, "month": month},
+        "period": {"year": year, "month": month, "granularity": "year" if is_year else "month"},
         "family": {
             "income": family_income,
             "expense": family_expense,
