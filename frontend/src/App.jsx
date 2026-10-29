@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Area,
   AreaChart,
@@ -2163,6 +2163,7 @@ function StatsPage({ token, me, go, show }) {
   const [viewYear, setViewYear] = useState(now.getFullYear());
   const [viewMonth, setViewMonth] = useState(now.getMonth() + 1);
   const [selectedCat, setSelectedCat] = useState(null);
+  const donutRef = useRef(null);
   const isYear = range === "year";
   const year = viewYear;
   const month = viewMonth;
@@ -2182,6 +2183,17 @@ function StatsPage({ token, me, go, show }) {
   useEffect(() => {
     setSelectedCat(null);
   }, [book, kind]);
+
+  // 点击饼图卡片以外区域时取消选中，避免“标签一直挂着”
+  useEffect(() => {
+    function onPointerDown(e) {
+      const root = donutRef.current;
+      if (!root || root.contains(e.target)) return;
+      setSelectedCat(null);
+    }
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => document.removeEventListener("pointerdown", onPointerDown);
+  }, []);
 
   useEffect(() => {
     if (!dash || isYear) return;
@@ -2398,7 +2410,7 @@ function StatsPage({ token, me, go, show }) {
         </FilterChip>
       </div>
 
-      <section className="card stats-donut-card">
+      <section className="card stats-donut-card" ref={donutRef}>
         <div className="stats-donut-top">
           <div>
             <p className="kl">{totalLabel}</p>
@@ -2411,7 +2423,7 @@ function StatsPage({ token, me, go, show }) {
           <div className="stats-donut-body">
             <div className="stats-donut-chart">
               <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
+                <PieChart onClick={() => setSelectedCat(null)}>
                   <Pie
                     data={cats}
                     dataKey="value"
@@ -2421,7 +2433,9 @@ function StatsPage({ token, me, go, show }) {
                     paddingAngle={1}
                     stroke="none"
                     cursor="pointer"
-                    onClick={(_, index) => {
+                    isAnimationActive={false}
+                    onClick={(_, index, e) => {
+                      e?.stopPropagation?.();
                       const name = cats[index]?.name;
                       if (!name) return;
                       setSelectedCat((prev) => (prev === name ? null : name));
@@ -2437,7 +2451,6 @@ function StatsPage({ token, me, go, show }) {
                       />
                     ))}
                   </Pie>
-                  <Tooltip formatter={(v, n) => [`¥${money(v)}`, categoryLabel(n)]} />
                 </PieChart>
               </ResponsiveContainer>
               <div className="stats-donut-center">
