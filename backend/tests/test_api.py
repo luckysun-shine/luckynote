@@ -269,3 +269,46 @@ def test_calendar_month_and_year():
             headers=yuan_headers,
         )
         assert peek.status_code == 403
+
+
+def test_insights_month_and_year():
+    with TestClient(app) as client:
+        res = client.post("/api/v1/auth/login", json={"username": "lin", "password": "luckynote"})
+        if res.status_code != 200:
+            res = client.post("/api/v1/auth/login", json={"username": "lin", "password": "luckynote2"})
+        assert res.status_code == 200
+        headers = {"Authorization": f"Bearer {res.json()['token']}"}
+        now = __import__("datetime").datetime.now()
+
+        month = client.get(
+            f"/api/v1/insights?year={now.year}&month={now.month}&granularity=month&scope=life&kind=expense",
+            headers=headers,
+        )
+        assert month.status_code == 200
+        body = month.json()
+        assert body["period"]["granularity"] == "month"
+        assert body["compare_period"]["label"]
+        assert "totals" in body
+        assert "focus" in body["totals"]
+        assert "delta" in body["totals"]
+        assert isinstance(body["categories"], list)
+        assert isinstance(body["anomalies"], list)
+        assert isinstance(body["savings_hints"], list)
+        assert "summary_text" in body
+        assert body["summary_text"]
+
+        year = client.get(
+            f"/api/v1/insights?year={now.year}&granularity=year&scope=life&kind=expense",
+            headers=headers,
+        )
+        assert year.status_code == 200
+        ybody = year.json()
+        assert ybody["period"]["granularity"] == "year"
+        assert ybody["period"]["year"] == now.year
+
+        biz = client.get(
+            f"/api/v1/insights?year={now.year}&month={now.month}&scope=business&kind=expense",
+            headers=headers,
+        )
+        assert biz.status_code == 200
+        assert biz.json()["scope"] == "business"

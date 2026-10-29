@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 import secrets
 from datetime import datetime, timedelta
 from typing import Annotated, Optional
@@ -728,6 +729,7 @@ def list_tx(
     owner_user_id: Optional[int] = None,
     tx_type: Optional[str] = None,
     limit: int = 200,
+    offset: int = 0,
     user: User = Depends(current_user),
     db: Session = Depends(get_db),
 ):
@@ -768,7 +770,9 @@ def list_tx(
         if can_see_ledger(user, l)
     ]
     q = q.filter(Transaction.ledger_id.in_(visible or [0]))
-    rows = q.order_by(Transaction.occurred_at.desc()).limit(limit).all()
+    safe_limit = max(1, min(int(limit or 200), 500))
+    safe_offset = max(0, int(offset or 0))
+    rows = q.order_by(Transaction.occurred_at.desc()).offset(safe_offset).limit(safe_limit).all()
     return [tx_out(t, db) for t in rows]
 
 
@@ -1086,23 +1090,43 @@ def dashboard(
             }
         )
 
-    # category pie: family-included expenses（月度/年度同一口径）
-    cat_rows = (
-        db.query(Category.name, Category.icon, Category.color, func.sum(Transaction.amount))
-        .join(Transaction, Transaction.category_id == Category.id)
-        .filter(
-            Transaction.household_id == hid,
-            Transaction.ledger_id.in_(family_ids or [0]),
-            Transaction.type == "expense",
-            Transaction.occurred_at >= start,
-            Transaction.occurred_at < end,
+    def _category_breakdown(ledger_ids: list[int], tx_type: str):
+        cat_rows = (
+            db.query(
+                Category.name,
+                Category.icon,
+                Category.color,
+                func.sum(Transaction.amount),
+                func.count(Transaction.id),
+            )
+            .join(Transaction, Transaction.category_id == Category.id)
+            .filter(
+                Transaction.household_id == hid,
+                Transaction.ledger_id.in_(ledger_ids or [0]),
+                Transaction.type == tx_type,
+                Transaction.occurred_at >= start,
+                Transaction.occurred_at < end,
+            )
+            .group_by(Category.id)
+            .order_by(func.sum(Transaction.amount).desc())
+            .all()
         )
-        .group_by(Category.id)
-        .all()
-    )
-    by_category = [
-        {"name": n, "icon": i, "color": c, "value": float(v)} for n, i, c, v in cat_rows
-    ]
+        return [
+            {
+                "name": n,
+                "icon": i,
+                "color": c,
+                "value": float(v or 0),
+                "count": int(cnt or 0),
+            }
+            for n, i, c, v, cnt in cat_rows
+        ]
+
+    # category pie: 生活/经营 × 支出/收入（月度/年度同一口径）
+    by_category = _category_breakdown(family_ids, "expense")
+    by_category_income = _category_breakdown(family_ids, "income")
+    by_category_business = _category_breakdown(biz_ids, "expense")
+    by_category_business_income = _category_breakdown(biz_ids, "income")
 
     trend = []
     if is_year:
@@ -1206,10 +1230,521 @@ def dashboard(
         },
         "members": member_stats,
         "by_category": by_category,
+        "by_category_income": by_category_income,
+        "by_category_business": by_category_business,
+        "by_category_business_income": by_category_business_income,
         "trend": trend,
         "budgets": budget_out,
         "recent": [tx_out(t, db) for t in recent],
         "recent_business": [tx_out(t, db) for t in recent_biz],
+    }
+
+
+def _prev_period(year: int, month: int, is_year: bool) -> tuple[int, int, datetime, datetime]:
+    """返回上期 (year, month占位, start, end)。年粒度时 month 固定为 1。"""
+    if is_year:
+        return year - 1, 1, datetime(year - 1, 1, 1), datetime(year, 1, 1)
+    if month == 1:
+        return year - 1, 12, *month_range(year - 1, 12)
+    return year, month - 1, *month_range(year, month - 1)
+
+
+def _category_breakdown_range(
+    db: Session,
+    hid: int,
+    ledger_ids: list[int],
+    start: datetime,
+    end: datetime,
+    tx_type: str,
+) -> list[dict]:
+    cat_rows = (
+        db.query(
+            Category.id,
+            Category.name,
+            Category.icon,
+            Category.color,
+            func.sum(Transaction.amount),
+            func.count(Transaction.id),
+        )
+        .join(Transaction, Transaction.category_id == Category.id)
+        .filter(
+            Transaction.household_id == hid,
+            Transaction.ledger_id.in_(ledger_ids or [0]),
+            Transaction.type == tx_type,
+            Transaction.occurred_at >= start,
+            Transaction.occurred_at < end,
+        )
+        .group_by(Category.id)
+        .order_by(func.sum(Transaction.amount).desc())
+        .all()
+    )
+    return [
+        {
+            "category_id": cid,
+            "name": n,
+            "icon": i,
+            "color": c,
+            "value": float(v or 0),
+            "count": int(cnt or 0),
+        }
+        for cid, n, i, c, v, cnt in cat_rows
+    ]
+
+
+def _daily_expense_series(
+    db: Session, hid: int, ledger_ids: list[int], start: datetime, end: datetime
+) -> list[dict]:
+    if not ledger_ids:
+        return []
+    rows = (
+        db.query(func.date(Transaction.occurred_at), func.coalesce(func.sum(Transaction.amount), 0.0))
+        .filter(
+            Transaction.household_id == hid,
+            Transaction.ledger_id.in_(ledger_ids),
+            Transaction.type == "expense",
+            Transaction.occurred_at >= start,
+            Transaction.occurred_at < end,
+        )
+        .group_by(func.date(Transaction.occurred_at))
+        .all()
+    )
+    out = []
+    for d, v in rows:
+        if hasattr(d, "isoformat"):
+            date_s = d.isoformat()
+        else:
+            date_s = str(d)[:10]
+        out.append({"date": date_s, "expense": float(v or 0)})
+    out.sort(key=lambda x: x["date"])
+    return out
+
+
+def _large_tx_rows(
+    db: Session,
+    hid: int,
+    ledger_ids: list[int],
+    start: datetime,
+    end: datetime,
+    threshold: float,
+    limit: int = 5,
+) -> list[dict]:
+    if not ledger_ids or threshold <= 0:
+        return []
+    rows = (
+        db.query(Transaction)
+        .filter(
+            Transaction.household_id == hid,
+            Transaction.ledger_id.in_(ledger_ids),
+            Transaction.type == "expense",
+            Transaction.occurred_at >= start,
+            Transaction.occurred_at < end,
+            Transaction.amount >= threshold,
+        )
+        .order_by(Transaction.amount.desc())
+        .limit(limit)
+        .all()
+    )
+    result = []
+    for t in rows:
+        cat = db.get(Category, t.category_id) if t.category_id else None
+        result.append(
+            {
+                "id": t.id,
+                "amount": float(t.amount),
+                "note": t.note or "",
+                "category_name": cat.name if cat else "",
+                "occurred_at": t.occurred_at.isoformat() if t.occurred_at else "",
+                "date": t.occurred_at.strftime("%Y-%m-%d") if t.occurred_at else "",
+            }
+        )
+    return result
+
+
+def _pct_delta(curr: float, prev: float) -> float | None:
+    if prev == 0:
+        return None if curr == 0 else 100.0
+    return round((curr - prev) / abs(prev) * 100, 1)
+
+
+def _mean_std(values: list[float]) -> tuple[float, float]:
+    if not values:
+        return 0.0, 0.0
+    n = len(values)
+    mean = sum(values) / n
+    if n < 2:
+        return mean, 0.0
+    var = sum((x - mean) ** 2 for x in values) / n
+    return mean, math.sqrt(var)
+
+
+@app.get("/api/v1/insights")
+def insights(
+    year: Optional[int] = None,
+    month: Optional[int] = None,
+    granularity: str = "month",
+    scope: str = "life",
+    kind: str = "expense",
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    """规则化智能分析：总结、环比、异常、节流建议。不调用大模型。"""
+    now = datetime.now()
+    year = year or now.year
+    month = month or now.month
+    is_year = granularity == "year"
+    kind = "income" if kind == "income" else "expense"
+    scope = "business" if scope in ("business", "biz") else "life"
+    hid = user.household_id
+
+    all_ledgers = db.query(Ledger).filter(Ledger.household_id == hid).all()
+    family_ids = [
+        l.id
+        for l in all_ledgers
+        if l.include_in_family and l.type != "business" and can_see_ledger(user, l)
+    ]
+    biz_ids = [l.id for l in all_ledgers if l.type == "business" and can_see_ledger(user, l)]
+    ledger_ids = biz_ids if scope == "business" else family_ids
+
+    if is_year:
+        start, end = datetime(year, 1, 1), datetime(year + 1, 1, 1)
+        period = {"year": year, "month": None, "granularity": "year", "label": f"{year}年"}
+    else:
+        start, end = month_range(year, month)
+        period = {"year": year, "month": month, "granularity": "month", "label": f"{year}年{month}月"}
+
+    py, pm, p_start, p_end = _prev_period(year, month, is_year)
+    compare_period = {
+        "year": py,
+        "month": None if is_year else pm,
+        "granularity": "year" if is_year else "month",
+        "label": f"{py}年" if is_year else f"{py}年{pm}月",
+    }
+
+    income = _sum(db, hid, ledger_ids, start, end, "income")
+    expense = _sum(db, hid, ledger_ids, start, end, "expense")
+    prev_income = _sum(db, hid, ledger_ids, p_start, p_end, "income")
+    prev_expense = _sum(db, hid, ledger_ids, p_start, p_end, "expense")
+    focus_curr = income if kind == "income" else expense
+    focus_prev = prev_income if kind == "income" else prev_expense
+    balance = income - expense
+    prev_balance = prev_income - prev_expense
+
+    totals = {
+        "income": round(income, 2),
+        "expense": round(expense, 2),
+        "balance": round(balance, 2),
+        "focus": round(focus_curr, 2),
+        "prev_income": round(prev_income, 2),
+        "prev_expense": round(prev_expense, 2),
+        "prev_balance": round(prev_balance, 2),
+        "prev_focus": round(focus_prev, 2),
+        "delta": round(focus_curr - focus_prev, 2),
+        "delta_pct": _pct_delta(focus_curr, focus_prev),
+        "income_delta": round(income - prev_income, 2),
+        "income_delta_pct": _pct_delta(income, prev_income),
+        "expense_delta": round(expense - prev_expense, 2),
+        "expense_delta_pct": _pct_delta(expense, prev_expense),
+        "balance_delta": round(balance - prev_balance, 2),
+    }
+
+    curr_cats = _category_breakdown_range(db, hid, ledger_ids, start, end, kind)
+    prev_cats = _category_breakdown_range(db, hid, ledger_ids, p_start, p_end, kind)
+    prev_map = {c["name"]: c for c in prev_cats}
+    cat_total = sum(c["value"] for c in curr_cats) or 1.0
+    categories = []
+    for c in curr_cats[:8]:
+        prev_v = float(prev_map.get(c["name"], {}).get("value") or 0)
+        delta = c["value"] - prev_v
+        categories.append(
+            {
+                **c,
+                "pct": round(c["value"] / cat_total * 100, 1),
+                "prev_value": round(prev_v, 2),
+                "delta": round(delta, 2),
+                "delta_pct": _pct_delta(c["value"], prev_v),
+            }
+        )
+
+    members = []
+    if scope == "life":
+        for m in db.query(User).filter(User.household_id == hid).all():
+            members.append(
+                {
+                    "user_id": m.id,
+                    "display_name": m.display_name,
+                    "value": _sum_by_user(db, hid, ledger_ids, start, end, kind, m.id),
+                }
+            )
+        members.sort(key=lambda x: x["value"], reverse=True)
+
+    anomalies: list[dict] = []
+    daily = []
+    avg_day = 0.0
+    if not is_year and kind == "expense":
+        daily = _daily_expense_series(db, hid, ledger_ids, start, end)
+        values = [d["expense"] for d in daily]
+        # 按日历天数补零更稳，但仅有流水的天也能算异常
+        days_span = max((end - start).days, 1)
+        # 若当前月未结束，只用到今天
+        if year == now.year and month == now.month:
+            days_span = max(now.day, 1)
+        sum_days = sum(values)
+        avg_day = sum_days / days_span if days_span else 0.0
+        mean, std = _mean_std(values)
+        spike_cut = max(avg_day * 2.5, mean + 2 * std, avg_day + 100) if avg_day or mean else 0
+        for d in daily:
+            if spike_cut > 0 and d["expense"] >= spike_cut and d["expense"] > 0:
+                anomalies.append(
+                    {
+                        "type": "spike_day",
+                        "severity": "warn" if d["expense"] < spike_cut * 1.5 else "high",
+                        "title": f"{int(d['date'][-2:])}日支出偏高",
+                        "detail": f"当日支出 ¥{d['expense']:.2f}，明显高于日均 ¥{avg_day:.2f}。",
+                        "ref": {"date": d["date"], "amount": d["expense"]},
+                    }
+                )
+
+        large_cut = max(avg_day * 5, 500.0)
+        for t in _large_tx_rows(db, hid, ledger_ids, start, end, large_cut):
+            label = t["note"] or t["category_name"] or "一笔支出"
+            anomalies.append(
+                {
+                    "type": "large_tx",
+                    "severity": "info",
+                    "title": f"大额支出 ¥{t['amount']:.2f}",
+                    "detail": f"「{label}」于 {t['date']}，超过本期大额阈值 ¥{large_cut:.0f}。",
+                    "ref": t,
+                }
+            )
+
+    # 分类环比暴增
+    for c in categories:
+        if (
+            kind == "expense"
+            and c["delta"] >= 200
+            and c.get("delta_pct") is not None
+            and c["delta_pct"] >= 50
+        ):
+            anomalies.append(
+                {
+                    "type": "category_surge",
+                    "severity": "warn",
+                    "title": f"「{c['name']}」明显增多",
+                    "detail": (
+                        f"本期 ¥{c['value']:.2f}，较{compare_period['label']} "
+                        f"{'+' if c['delta'] >= 0 else ''}{c['delta']:.2f}"
+                        f"（{c['delta_pct']:+.1f}%）。"
+                    ),
+                    "ref": {"name": c["name"], "delta": c["delta"], "delta_pct": c["delta_pct"]},
+                }
+            )
+
+    # 预算
+    budget_items = []
+    if scope == "life" and not is_year and kind == "expense":
+        budgets = (
+            db.query(Budget)
+            .filter(Budget.household_id == hid, Budget.year == year, Budget.month == month)
+            .all()
+        )
+        for b in budgets:
+            lids = ledger_ids
+            if b.ledger_id:
+                lids = [b.ledger_id]
+            spent_q = db.query(func.coalesce(func.sum(Transaction.amount), 0.0)).filter(
+                Transaction.household_id == hid,
+                Transaction.ledger_id.in_(lids or [0]),
+                Transaction.type == "expense",
+                Transaction.occurred_at >= start,
+                Transaction.occurred_at < end,
+            )
+            if b.category_id:
+                spent_q = spent_q.filter(Transaction.category_id == b.category_id)
+            spent = float(spent_q.scalar())
+            ratio = spent / b.amount if b.amount else 0
+            cat = db.get(Category, b.category_id) if b.category_id else None
+            name = cat.name if cat else "家庭总支出"
+            item = {
+                "id": b.id,
+                "category_name": name,
+                "amount": float(b.amount),
+                "spent": round(spent, 2),
+                "ratio": round(ratio, 3),
+                "remaining": round(float(b.amount) - spent, 2),
+            }
+            budget_items.append(item)
+            if ratio >= 1:
+                anomalies.append(
+                    {
+                        "type": "budget_over",
+                        "severity": "high",
+                        "title": f"「{name}」预算已超支",
+                        "detail": f"已用 ¥{spent:.2f} / 预算 ¥{b.amount:.2f}（{ratio * 100:.0f}%）。",
+                        "ref": item,
+                    }
+                )
+            elif ratio >= 0.85:
+                anomalies.append(
+                    {
+                        "type": "budget_warn",
+                        "severity": "warn",
+                        "title": f"「{name}」预算将尽",
+                        "detail": f"已用 ¥{spent:.2f} / 预算 ¥{b.amount:.2f}（{ratio * 100:.0f}%），剩余 ¥{item['remaining']:.2f}。",
+                        "ref": item,
+                    }
+                )
+
+    # 节流建议
+    savings_hints: list[dict] = []
+    if kind == "expense" and categories:
+        top = categories[0]
+        if top["pct"] >= 45:
+            compress = round(top["value"] * 0.1, 2)
+            savings_hints.append(
+                {
+                    "code": "top_heavy",
+                    "category_name": top["name"],
+                    "title": f"「{top['name']}」占比偏高",
+                    "detail": f"占本期支出 {top['pct']:.1f}%。若压缩约 10%，大约能省 ¥{compress:.2f}。",
+                    "estimate_save": compress,
+                }
+            )
+        elif top["pct"] >= 30:
+            savings_hints.append(
+                {
+                    "code": "top_watch",
+                    "category_name": top["name"],
+                    "title": f"关注「{top['name']}」节奏",
+                    "detail": f"占比 {top['pct']:.1f}%（¥{top['value']:.2f}），可按周复盘是否有可压缩空间。",
+                    "estimate_save": round(top["value"] * 0.05, 2),
+                }
+            )
+        for c in categories[1:4]:
+            if c.get("delta_pct") is not None and c["delta_pct"] >= 40 and c["delta"] >= 150:
+                savings_hints.append(
+                    {
+                        "code": "surge_cut",
+                        "category_name": c["name"],
+                        "title": f"「{c['name']}」增长较快",
+                        "detail": f"较{compare_period['label']}增加 ¥{c['delta']:.2f}，建议先砍非必要项。",
+                        "estimate_save": round(c["delta"] * 0.3, 2),
+                    }
+                )
+
+    for b in budget_items:
+        if b["ratio"] >= 0.85:
+            savings_hints.append(
+                {
+                    "code": "budget_pace",
+                    "category_name": b["category_name"],
+                    "title": f"放慢「{b['category_name']}」支出",
+                    "detail": f"预算进度 {b['ratio'] * 100:.0f}%，剩余 ¥{b['remaining']:.2f}。",
+                    "estimate_save": max(0.0, -b["remaining"]) if b["ratio"] >= 1 else round(b["spent"] * 0.05, 2),
+                }
+            )
+
+    biz_note = None
+    if scope == "business":
+        profit = income - expense
+        margin = (profit / income) if income > 0 else None
+        cost_ratio = (expense / income) if income > 0 else None
+        biz_note = {
+            "profit": round(profit, 2),
+            "margin": round(margin * 100, 1) if margin is not None else None,
+            "cost_ratio": round(cost_ratio * 100, 1) if cost_ratio is not None else None,
+        }
+        if profit < 0:
+            savings_hints.append(
+                {
+                    "code": "biz_loss",
+                    "category_name": "",
+                    "title": "经营毛利为负",
+                    "detail": "建议核对进货与订阅类固定成本，优先处理高费用项。",
+                    "estimate_save": round(abs(profit) * 0.2, 2),
+                }
+            )
+        elif cost_ratio is not None and cost_ratio > 0.85:
+            savings_hints.append(
+                {
+                    "code": "biz_cost",
+                    "category_name": "",
+                    "title": "经营费用率偏高",
+                    "detail": f"费用约占收入 {cost_ratio * 100:.0f}%，可梳理高频进货与固定订阅。",
+                    "estimate_save": round(expense * 0.08, 2),
+                }
+            )
+        elif margin is not None and margin < 0.15 and income > 0:
+            savings_hints.append(
+                {
+                    "code": "biz_margin",
+                    "category_name": "",
+                    "title": "毛利率偏低",
+                    "detail": f"当前毛利率约 {margin * 100:.1f}%，可检查定价或成本结构。",
+                    "estimate_save": round(income * 0.05, 2),
+                }
+            )
+
+    if kind == "expense" and not savings_hints and focus_curr > 0:
+        savings_hints.append(
+            {
+                "code": "keep_going",
+                "category_name": "",
+                "title": "结构整体平稳",
+                "detail": "继续保持分类记账，月底对照预算会更从容。",
+                "estimate_save": 0,
+            }
+        )
+
+    # 去重同类异常，最多各保留若干
+    anomalies = anomalies[:12]
+    # savings 去重同 code+category
+    seen_hint = set()
+    unique_hints = []
+    for h in savings_hints:
+        key = (h["code"], h.get("category_name") or "")
+        if key in seen_hint:
+            continue
+        seen_hint.add(key)
+        unique_hints.append(h)
+    savings_hints = unique_hints[:8]
+
+    summary_bits = []
+    book_word = "经营" if scope == "business" else "生活"
+    kind_word = "收入" if kind == "income" else "支出"
+    summary_bits.append(
+        f"{period['label']}{book_word}{kind_word}合计 ¥{focus_curr:.2f}"
+        + (f"，结余 ¥{balance:.2f}" if scope == "life" else f"，毛利 ¥{balance:.2f}")
+        + "。"
+    )
+    if categories:
+        top = categories[0]
+        summary_bits.append(
+            f"「{top['name']}」占比最高（{top['pct']:.1f}% · ¥{top['value']:.2f}"
+            + (f" · {top['count']} 笔" if top.get("count") else "")
+            + "）。"
+        )
+        if len(categories) > 1:
+            s = categories[1]
+            summary_bits.append(f"其次是「{s['name']}」¥{s['value']:.2f}（{s['pct']:.1f}%）。")
+    if members and members[0]["value"] > 0:
+        summary_bits.append(f"记账人方面，{members[0]['display_name']} 本期{kind_word}最多。")
+    if not is_year and kind == "expense" and avg_day > 0:
+        summary_bits.append(f"日均支出约 ¥{avg_day:.2f}。")
+
+    return {
+        "period": period,
+        "compare_period": compare_period,
+        "scope": scope,
+        "kind": kind,
+        "totals": totals,
+        "categories": categories,
+        "members": members,
+        "anomalies": anomalies,
+        "savings_hints": savings_hints,
+        "budget": {"items": budget_items},
+        "daily": {"avg": round(avg_day, 2), "days": daily} if not is_year else None,
+        "business": biz_note,
+        "summary_text": "".join(summary_bits),
     }
 
 

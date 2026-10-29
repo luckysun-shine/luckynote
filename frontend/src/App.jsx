@@ -195,6 +195,159 @@ function money(n) {
   return Number(n || 0).toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+/** 日历格子用的紧凑金额 */
+function moneyCell(n) {
+  const v = Math.abs(Number(n || 0));
+  if (!v) return "";
+  if (v >= 10000) return `${(v / 10000).toFixed(v % 10000 === 0 ? 0 : 1)}万`;
+  if (v >= 1000) return `${(v / 1000).toFixed(1)}k`;
+  return String(Math.round(v));
+}
+
+function formatDeltaPct(pct) {
+  if (pct == null || Number.isNaN(pct)) return "持平";
+  const n = Number(pct);
+  if (n === 0) return "持平";
+  return `${n > 0 ? "+" : ""}${n.toFixed(1)}%`;
+}
+
+function formatDeltaAmt(delta) {
+  const n = Number(delta || 0);
+  if (n === 0) return "¥0.00";
+  return `${n > 0 ? "+" : "−"}¥${money(Math.abs(n))}`;
+}
+
+/** 无 insights 接口时的降级文案（仅用 dashboard 已有字段） */
+function buildFallbackInsights({ periodLabel, isExpense, isLife, total, cats, members, avgDay, biz }) {
+  const kindWord = isExpense ? "支出" : "收入";
+  const bookWord = isLife ? "生活" : "经营";
+  const top = cats[0];
+  const parts = [`${periodLabel}${bookWord}${kindWord}合计 ¥${money(total)}。`];
+  if (top) {
+    parts.push(`「${categoryLabel(top.name)}」占比最高（${top.pct.toFixed(1)}%）。`);
+  }
+  if (isExpense && avgDay > 0) parts.push(`日均约 ¥${money(avgDay)}。`);
+  if (members?.[0]?.value > 0) parts.push(`${members[0].name} 本期${kindWord}较多。`);
+  if (!isLife && biz) parts.push(`经营毛利 ¥${money(biz.profit)}。`);
+  return {
+    summary_text: parts.join(""),
+    totals: null,
+    anomalies: [],
+    savings_hints: [
+      {
+        code: "fallback",
+        title: isExpense ? "继续分类记账" : "区分稳定与临时收入",
+        detail: isExpense ? "月底对照预算会更从容。" : "方便做结余计划。",
+        estimate_save: 0,
+      },
+    ],
+    compare_period: null,
+  };
+}
+
+function StatsInsightsPanel({ data, loading, isExpense, go }) {
+  if (loading && !data) {
+    return (
+      <section className="card stats-ai-card">
+        <p className="muted" style={{ margin: 0 }}>
+          正在生成分析…
+        </p>
+      </section>
+    );
+  }
+  if (!data) return null;
+
+  const totals = data.totals;
+  const compareLabel = data.compare_period?.label || "上期";
+  const focusDelta = totals?.delta;
+  const focusPct = totals?.delta_pct;
+  const up = (focusDelta || 0) > 0;
+  const down = (focusDelta || 0) < 0;
+  const kindWord = isExpense ? "支出" : "收入";
+
+  return (
+    <section className="card stats-ai-card stats-insights-panel">
+      <div className="stats-ai-head">
+        <span className="stats-ai-badge">析</span>
+        <div>
+          <h3 className="stats-card-title" style={{ margin: 0 }}>
+            智能分析
+          </h3>
+          <p className="muted" style={{ margin: "2px 0 0", fontSize: "0.72rem" }}>
+            规则统计 · 无需大模型 · {data.period?.label || ""}
+          </p>
+        </div>
+      </div>
+
+      <div className="stats-insight-block">
+        <h4 className="stats-insight-h">本期总结</h4>
+        <p className="stats-ai-summary">{data.summary_text || "暂无足够数据生成总结。"}</p>
+      </div>
+
+      {totals && (
+        <div className="stats-insight-block">
+          <h4 className="stats-insight-h">较{compareLabel}</h4>
+          <div className="stats-compare-row">
+            <div className={`stats-compare-pill ${up ? "up" : down ? "down" : "flat"}`}>
+              <span>{kindWord}</span>
+              <strong>{formatDeltaPct(focusPct)}</strong>
+              <em>{formatDeltaAmt(focusDelta)}</em>
+            </div>
+            {isExpense && (
+              <div className="stats-compare-pill flat">
+                <span>结余变化</span>
+                <strong>{formatDeltaAmt(totals.balance_delta)}</strong>
+              </div>
+            )}
+          </div>
+          {totals.prev_focus != null && (
+            <p className="stats-insight-note">
+              {compareLabel}
+              {kindWord} ¥{money(totals.prev_focus)} → 本期 ¥{money(totals.focus)}
+            </p>
+          )}
+        </div>
+      )}
+
+      {Array.isArray(data.anomalies) && data.anomalies.length > 0 && (
+        <div className="stats-insight-block">
+          <h4 className="stats-insight-h">异常提醒</h4>
+          <ul className="stats-anomaly-list">
+            {data.anomalies.map((a, i) => (
+              <li key={`${a.type}-${i}`} className={`sev-${a.severity || "info"}`}>
+                <div className="stats-anomaly-title">{a.title}</div>
+                <div className="stats-anomaly-detail">{a.detail}</div>
+                {a.type === "spike_day" && a.ref?.date && (
+                  <button type="button" className="text-link" onClick={() => go("calendar")}>
+                    去日历查看
+                  </button>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {Array.isArray(data.savings_hints) && data.savings_hints.length > 0 && (
+        <div className="stats-insight-block">
+          <h4 className="stats-insight-h">{isExpense ? "节流建议" : "结构建议"}</h4>
+          <ul className="stats-hint-list">
+            {data.savings_hints.map((h, i) => (
+              <li key={`${h.code}-${h.category_name || ""}-${i}`}>
+                <strong>{h.title}</strong>
+                <span>{h.detail}</span>
+                {h.estimate_save > 0 && (
+                  <em className="stats-hint-save">预估可关注约 ¥{money(h.estimate_save)}</em>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </section>
+  );
+}
+
 const CAT_DISPLAY = {
   餐饮: "餐饮美食",
   日用: "日用购物",
@@ -755,22 +908,23 @@ export default function App() {
         {page === "home" && <Home token={token} me={me} go={go} show={show} openSettings={openSettings} />}
         {page === "bills" && <BillsPage token={token} me={me} show={show} go={go} />}
         {page === "stats" && <StatsPage token={token} me={me} go={go} show={show} />}
-        {page === "books" && <Books token={token} me={me} show={show} />}
+        {page === "books" && <Books token={token} me={me} show={show} go={go} />}
         {page === "calendar" && <CalendarPage token={token} me={me} show={show} go={go} />}
         {page === "accounts" && <AccountsHome token={token} me={me} show={show} go={go} openSettings={openSettings} />}
-        {page === "biz" && <Biz token={token} me={me} show={show} />}
-        {page === "budget" && <Budget token={token} show={show} />}
+        {page === "biz" && <Biz token={token} me={me} show={show} go={go} />}
+        {page === "budget" && <Budget token={token} show={show} go={go} />}
         {(page === "settings" || page === "family") && (
           <SettingsPanel
             token={token}
             me={me}
             show={show}
+            go={go}
             onMeUpdate={setMe}
             initialTab={settingsTab}
           />
         )}
-        {page === "backup" && <BackupPanel token={token} me={me} show={show} />}
-        {page === "ai" && <AiPanel token={token} show={show} me={me} />}
+        {page === "backup" && <BackupPanel token={token} me={me} show={show} go={go} />}
+        {page === "ai" && <AiPanel token={token} show={show} me={me} go={go} />}
         {(page === "me" || page === "more") && (
           <MeHub
             me={me}
@@ -1127,6 +1281,22 @@ function MeHub({ me, go, openSettings, logout }) {
   );
 }
 
+/** 内层页统一返回头：标题旁显示返回，避免手机端“进了就出不来” */
+function SubPageHead({ title, sub, onBack, right, backLabel = "返回" }) {
+  return (
+    <div className="sub-page-head">
+      <div className="sub-page-head-row">
+        <button type="button" className="page-back" onClick={onBack} aria-label={backLabel}>
+          <Icon name="chevron-left" size={20} />
+          <h2>{title}</h2>
+        </button>
+        {right}
+      </div>
+      {sub ? <p className="sub-page-sub">{sub}</p> : null}
+    </div>
+  );
+}
+
 function Segmented({ value, options, onChange }) {
   return (
     <div className="segmented" role="tablist">
@@ -1429,7 +1599,7 @@ function CalendarPage({ token, me, show, go }) {
                   return (
                     <div key={`o${i}`} className="cal-cell outside" aria-hidden>
                       <span className="cal-day-num">{cellMeta.day}</span>
-                      <span className="cal-dots" />
+                      <span className="cal-amounts" />
                     </div>
                   );
                 }
@@ -1437,32 +1607,27 @@ function CalendarPage({ token, me, show, go }) {
                 const key = `${year}-${pad2(month)}-${pad2(d)}`;
                 const cell = dayMap[key];
                 const on = selectedDay === d;
+                const hasIn = cell?.income > 0;
+                const hasOut = cell?.expense > 0;
                 return (
                   <button
                     key={key}
                     type="button"
-                    className={`cal-cell ${on ? "on" : ""} ${isToday(cellMeta) ? "today" : ""}`}
+                    className={`cal-cell ${on ? "on" : ""} ${isToday(cellMeta) ? "today" : ""} ${hasIn || hasOut ? "has-amt" : ""}`}
                     onClick={() => setSelectedDay(d)}
                   >
                     <span className="cal-day-num">{d}</span>
-                    <span className="cal-dots" aria-hidden>
-                      {cell?.income > 0 && <i className="dot in" />}
-                      {cell?.expense > 0 && <i className="dot out" />}
+                    <span className="cal-amounts" aria-hidden>
+                      {hasOut && <span className="cal-out">-{moneyCell(cell.expense)}</span>}
+                      {hasIn && <span className="cal-in">+{moneyCell(cell.income)}</span>}
                     </span>
                   </button>
                 );
               })}
             </div>
             <div className="cal-legend">
-              <span>
-                <i className="dot in" /> 收入
-              </span>
-              <span>
-                <i className="dot out" /> 支出
-              </span>
-              <span>
-                <i className="dot todo" /> 待办
-              </span>
+              <span className="cal-out">支出金额</span>
+              <span className="cal-in">收入金额</span>
               <span className="cal-legend-hint">点日期查看当日账单</span>
             </div>
           </div>
@@ -1807,18 +1972,46 @@ function Home({ token, me, go, show, openSettings }) {
 }
 
 function BillsPage({ token, me, show, go }) {
+  const now = new Date();
   const [scope, setScope] = useState("all");
   const [q, setQ] = useState("");
+  const [viewYear, setViewYear] = useState(now.getFullYear());
+  const [viewMonth, setViewMonth] = useState(now.getMonth() + 1);
+
+  function shiftMonth(delta) {
+    let m = viewMonth + delta;
+    let y = viewYear;
+    if (m < 1) {
+      m = 12;
+      y -= 1;
+    } else if (m > 12) {
+      m = 1;
+      y += 1;
+    }
+    setViewMonth(m);
+    setViewYear(y);
+  }
 
   return (
     <div className="bills-page">
       <div className="page-head compact">
         <div>
           <h2 className="hello">账单</h2>
-          <p className="sub">按日期查看流水，点一笔看详情。</p>
+          <p className="sub">按月查看流水，点一笔看详情。</p>
         </div>
         <button type="button" className="text-link" onClick={() => go("calendar")}>
           日历查账
+        </button>
+      </div>
+      <div className="bills-month-nav">
+        <button type="button" className="cal-nav-btn" onClick={() => shiftMonth(-1)} aria-label="上月">
+          <Icon name="chevron-left" size={18} />
+        </button>
+        <strong>
+          {viewYear}年{viewMonth}月
+        </strong>
+        <button type="button" className="cal-nav-btn" onClick={() => shiftMonth(1)} aria-label="下月">
+          <Icon name="chevron-right" size={18} />
         </button>
       </div>
       <Segmented
@@ -1834,33 +2027,64 @@ function BillsPage({ token, me, show, go }) {
         <span aria-hidden>⌕</span>
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="搜索备注、类目…" />
       </label>
-      <div className="list" style={{ marginTop: 12 }}>
-        <BillsList token={token} me={me} show={show} scope={scope} filterText={q} />
+      <div className="bills-list-wrap">
+        <BillsList
+          token={token}
+          me={me}
+          show={show}
+          scope={scope}
+          filterText={q}
+          year={viewYear}
+          month={viewMonth}
+        />
       </div>
     </div>
   );
 }
 
-function BillsList({ token, me, show, scope, filterText }) {
+const BILLS_PAGE_SIZE = 120;
+
+function BillsList({ token, me, show, scope, filterText, year, month }) {
   const [rows, setRows] = useState([]);
   const [ledgers, setLedgers] = useState([]);
   const [accounts, setAccounts] = useState([]);
   const [cats, setCats] = useState([]);
   const [editTx, setEditTx] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
 
-  function loadRows() {
-    const path =
-      scope === "biz"
-        ? "/api/v1/transactions?limit=80&ledger_type=business"
-        : scope === "life"
-          ? "/api/v1/transactions?limit=80&ledger_type=life"
-          : "/api/v1/transactions?limit=80";
-    return api(path, { token }).then(setRows);
+  function buildPath(offset = 0) {
+    const parts = [`limit=${BILLS_PAGE_SIZE}`, `offset=${offset}`, `year=${year}`, `month=${month}`];
+    if (scope === "biz") parts.push("ledger_type=business");
+    else if (scope === "life") parts.push("ledger_type=life");
+    return `/api/v1/transactions?${parts.join("&")}`;
+  }
+
+  function loadRows({ append = false } = {}) {
+    const offset = append ? rows.length : 0;
+    setLoading(true);
+    return api(buildPath(offset), { token })
+      .then((data) => {
+        const list = Array.isArray(data) ? data : [];
+        setHasMore(list.length >= BILLS_PAGE_SIZE);
+        setRows((prev) => (append ? [...prev, ...list] : list));
+      })
+      .finally(() => setLoading(false));
   }
 
   useEffect(() => {
-    loadRows();
-  }, [token, scope]);
+    setRows([]);
+    setHasMore(true);
+    setLoading(true);
+    api(buildPath(0), { token })
+      .then((data) => {
+        const list = Array.isArray(data) ? data : [];
+        setHasMore(list.length >= BILLS_PAGE_SIZE);
+        setRows(list);
+      })
+      .catch((e) => show(e.message))
+      .finally(() => setLoading(false));
+  }, [token, scope, year, month]);
 
   useEffect(() => {
     Promise.all([
@@ -1894,10 +2118,20 @@ function BillsList({ token, me, show, scope, filterText }) {
 
   return (
     <>
-      {filtered.length === 0 ? (
-        <div className="empty-state">今天还没有账单，去记第一笔吧。</div>
+      {filtered.length === 0 && !loading ? (
+        <div className="empty-state">这个月还没有账单，去记第一笔吧。</div>
       ) : (
         <TxDayGroups rows={filtered} me={me} onEdit={(row) => setEditTx(row)} />
+      )}
+      {hasMore && !filterText?.trim() && (
+        <button
+          type="button"
+          className="btn ghost bills-load-more"
+          disabled={loading}
+          onClick={() => loadRows({ append: true })}
+        >
+          {loading ? "加载中…" : "加载更早账单"}
+        </button>
       )}
       {editTx && (
         <TxEditModal
@@ -1921,24 +2155,33 @@ function StatsPage({ token, me, go, show }) {
   const now = new Date();
   const [dash, setDash] = useState(null);
   const [monthCal, setMonthCal] = useState(null);
+  const [insightsData, setInsightsData] = useState(null);
+  const [insightsLoading, setInsightsLoading] = useState(false);
   const [book, setBook] = useState("life"); // life | biz
   const [kind, setKind] = useState("expense"); // expense | income
   const [range, setRange] = useState("month"); // month | year
   const [viewYear, setViewYear] = useState(now.getFullYear());
   const [viewMonth, setViewMonth] = useState(now.getMonth() + 1);
+  const [selectedCat, setSelectedCat] = useState(null);
   const isYear = range === "year";
   const year = viewYear;
   const month = viewMonth;
 
   useEffect(() => {
-    const g = isYear ? "year" : "month";
     const qs = isYear
       ? `year=${viewYear}&granularity=year`
       : `year=${viewYear}&month=${viewMonth}&granularity=month`;
     api(`/api/v1/dashboard?${qs}`, { token })
-      .then(setDash)
+      .then((d) => {
+        setDash(d);
+        setSelectedCat(null);
+      })
       .catch((e) => show(e.message));
   }, [token, show, isYear, viewYear, viewMonth]);
+
+  useEffect(() => {
+    setSelectedCat(null);
+  }, [book, kind]);
 
   useEffect(() => {
     if (!dash || isYear) return;
@@ -1947,6 +2190,21 @@ function StatsPage({ token, me, go, show }) {
       .then(setMonthCal)
       .catch(() => setMonthCal(null));
   }, [token, dash, book, year, month, isYear]);
+
+  useEffect(() => {
+    const scope = book === "biz" ? "business" : "life";
+    const qs = [
+      `year=${viewYear}`,
+      isYear ? "granularity=year" : `month=${viewMonth}&granularity=month`,
+      `scope=${scope}`,
+      `kind=${kind}`,
+    ].join("&");
+    setInsightsLoading(true);
+    api(`/api/v1/insights?${qs}`, { token })
+      .then(setInsightsData)
+      .catch(() => setInsightsData(null))
+      .finally(() => setInsightsLoading(false));
+  }, [token, viewYear, viewMonth, isYear, book, kind]);
 
   if (!dash) return <p className="muted">正在汇总统计…</p>;
 
@@ -1960,13 +2218,20 @@ function StatsPage({ token, me, go, show }) {
       ? dash.business.expense
       : dash.business.income;
 
-  const catsRaw = isExpense ? dash.by_category || [] : [];
+  const catsRaw = isLife
+    ? isExpense
+      ? dash.by_category || []
+      : dash.by_category_income || []
+    : isExpense
+      ? dash.by_category_business || []
+      : dash.by_category_business_income || [];
   const catTotal = catsRaw.reduce((s, c) => s + (c.value || 0), 0) || 1;
   const cats = catsRaw.map((c, i) => ({
     ...c,
     color: c.color || STAT_COLORS[i % STAT_COLORS.length],
     pct: ((c.value || 0) / catTotal) * 100,
   }));
+  const activeCat = selectedCat ? cats.find((c) => c.name === selectedCat) || null : null;
 
   const dayMap = Object.fromEntries((monthCal?.days || []).map((d) => [Number(d.date.slice(-2)), d]));
   const dim = daysInMonth(year, month);
@@ -2016,6 +2281,20 @@ function StatsPage({ token, me, go, show }) {
     : isYear
       ? "本年累计收入"
       : "本月累计收入";
+
+  const fallbackInsights = buildFallbackInsights({
+    periodLabel,
+    isExpense,
+    isLife,
+    total,
+    cats,
+    members,
+    avgDay,
+    biz: dash.business,
+  });
+  const panelInsights = insightsData || fallbackInsights;
+  const daysSpan = isYear ? Math.max(monthCap, 1) * 30 : Math.max(todayCap, 1);
+  const selectedAvg = activeCat ? activeCat.value / daysSpan : 0;
 
   return (
     <div className="stats-page">
@@ -2128,7 +2407,7 @@ function StatsPage({ token, me, go, show }) {
           <span className="stats-pill">{isYear ? `${year}全年` : `截至${todayCap}日`}</span>
         </div>
 
-        {isExpense && isLife && cats.length > 0 ? (
+        {cats.length > 0 ? (
           <div className="stats-donut-body">
             <div className="stats-donut-chart">
               <ResponsiveContainer width="100%" height="100%">
@@ -2138,45 +2417,110 @@ function StatsPage({ token, me, go, show }) {
                     dataKey="value"
                     nameKey="name"
                     innerRadius={38}
-                    outerRadius={58}
+                    outerRadius={activeCat ? 62 : 58}
                     paddingAngle={1}
                     stroke="none"
+                    cursor="pointer"
+                    onClick={(_, index) => {
+                      const name = cats[index]?.name;
+                      if (!name) return;
+                      setSelectedCat((prev) => (prev === name ? null : name));
+                    }}
                   >
                     {cats.map((c) => (
-                      <Cell key={c.name} fill={c.color} />
+                      <Cell
+                        key={c.name}
+                        fill={c.color}
+                        opacity={!activeCat || activeCat.name === c.name ? 1 : 0.35}
+                        stroke={activeCat?.name === c.name ? "#fff" : "none"}
+                        strokeWidth={activeCat?.name === c.name ? 2 : 0}
+                      />
                     ))}
                   </Pie>
+                  <Tooltip formatter={(v, n) => [`¥${money(v)}`, categoryLabel(n)]} />
                 </PieChart>
               </ResponsiveContainer>
               <div className="stats-donut-center">
-                <strong>{cats.length}</strong>
-                <span>{isExpense ? "支出分类" : "收入分类"}</span>
+                {activeCat ? (
+                  <>
+                    <strong>{activeCat.pct.toFixed(0)}%</strong>
+                    <span>{categoryLabel(activeCat.name)}</span>
+                  </>
+                ) : (
+                  <>
+                    <strong>{cats.length}</strong>
+                    <span>{isExpense ? "支出分类" : "收入分类"}</span>
+                  </>
+                )}
               </div>
             </div>
             <div className="stats-legend">
-              {cats.slice(0, 6).map((c) => (
-                <div className="stats-legend-row" key={c.name}>
+              {cats.slice(0, 8).map((c) => (
+                <button
+                  type="button"
+                  className={`stats-legend-row ${activeCat?.name === c.name ? "on" : ""}`}
+                  key={c.name}
+                  onClick={() => setSelectedCat((prev) => (prev === c.name ? null : c.name))}
+                >
                   <span className="stats-legend-name">
                     <i style={{ background: c.color }} />
-                    {c.name}
+                    {categoryLabel(c.name)}
                   </span>
                   <span className="stats-legend-val">
                     {c.pct.toFixed(1)}% · ¥{money(c.value)}
                   </span>
-                </div>
+                </button>
               ))}
             </div>
           </div>
         ) : (
           <p className="muted" style={{ margin: "8px 0 0" }}>
             {isExpense
-              ? isLife
-                ? `${isYear ? "本年" : "本月"}还没有支出分类数据。`
-                : `经营实付 ¥${money(dash.business.expense)}，毛利 ¥${money(dash.business.profit)}。`
+              ? `${isYear ? "本年" : "本月"}还没有${isLife ? "支出" : "经营支出"}分类数据。`
               : `${isYear ? "本年" : "本月"}${isLife ? "生活" : "经营"}收入 ¥${money(total)}。`}
           </p>
         )}
+
+        {activeCat && (
+          <div className="stats-cat-detail">
+            <div className="stats-cat-detail-head">
+              <span className="stats-cat-dot" style={{ background: activeCat.color }} />
+              <strong>{categoryLabel(activeCat.name)}</strong>
+              <button type="button" className="text-link" onClick={() => setSelectedCat(null)}>
+                清除
+              </button>
+            </div>
+            <div className="stats-cat-metrics">
+              <div>
+                <span className="kl">金额</span>
+                <b>¥{money(activeCat.value)}</b>
+              </div>
+              <div>
+                <span className="kl">占比</span>
+                <b>{activeCat.pct.toFixed(1)}%</b>
+              </div>
+              <div>
+                <span className="kl">笔数</span>
+                <b>{activeCat.count ?? "—"}</b>
+              </div>
+              <div>
+                <span className="kl">{isYear ? "月均约" : "日均约"}</span>
+                <b>¥{money(isYear ? activeCat.value / Math.max(monthCap, 1) : selectedAvg)}</b>
+              </div>
+            </div>
+          </div>
+        )}
+        {!activeCat && cats.length > 0 && (
+          <p className="stats-donut-hint">点击环图或分类，查看该类指标</p>
+        )}
       </section>
+
+      <StatsInsightsPanel
+        data={panelInsights}
+        loading={insightsLoading}
+        isExpense={isExpense}
+        go={go}
+      />
 
       {isExpense && !isYear && (
         <section className="card stats-trend-card">
@@ -2327,20 +2671,16 @@ function AccountsHome({ token, me, show, go, openSettings }) {
 
   return (
     <div className="accounts-home">
-      <div className="page-head">
-        <div>
-          <h2 className="hello">账户资产</h2>
-          <p className="sub">{me?.user.display_name} · 生活与经营账户分开统计</p>
-        </div>
-        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          <button type="button" className="text-link" onClick={() => go("home")}>
-            ← 首页
-          </button>
-          <button type="button" className="btn" onClick={() => openSettings("wallets")}>
+      <SubPageHead
+        title="账户资产"
+        sub={`${me?.user.display_name || ""} · 生活与经营账户分开统计`}
+        onBack={() => go("home")}
+        right={
+          <button type="button" className="btn btn-sm" onClick={() => openSettings("wallets")}>
             管理
           </button>
-        </div>
-      </div>
+        }
+      />
 
       <div className="asset-hero">
         <div className="kl">生活账户期初合计</div>
@@ -2465,6 +2805,17 @@ function TxEditModal({ tx, token, me, ledgers, accounts, cats, onClose, onSaved,
   useBodyScrollLock(true);
 
   useEffect(() => {
+    function onKey(e) {
+      if (e.key === "Escape") {
+        if (editing) setEditing(false);
+        else onClose();
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [editing, onClose]);
+
+  useEffect(() => {
     setForm(txFormFromRow(tx));
     setEditing(false);
   }, [tx]);
@@ -2496,79 +2847,86 @@ function TxEditModal({ tx, token, me, ledgers, accounts, cats, onClose, onSaved,
 
   if (!editing) {
     return (
-      <div className="add-page tx-detail-page">
-        <header className="add-page-head">
-          <button type="button" className="add-back" onClick={onClose} aria-label="返回">
-            <Icon name="chevron-left" size={22} />
-          </button>
-          <div className="add-page-titles">
-            <div className="add-page-title-row">
-              <h2>账单详情</h2>
-              {canEdit && (
-                <button type="button" className="text-link" onClick={() => setEditing(true)}>
-                  编辑
-                </button>
-              )}
-            </div>
-            <p className="add-page-sub">
-              {tx.ledger_name} · {tx.source === "ai_wechat" ? "微信入账" : "手工记账"}
-            </p>
-          </div>
-        </header>
-        <div className="tx-detail-hero">
-          <span className="tx-detail-icon">
-            <CategoryIcon name={tx.category_name} emoji={tx.category_icon} size={28} />
-          </span>
-          <p className="tx-detail-note">{tx.note || categoryLabel(tx.category_name)}</p>
-          <p className={`tx-detail-amt ${tx.type}`}>
-            {tx.type === "expense" ? "−" : "+"}¥{money(tx.amount)}
-          </p>
-        </div>
-        <div className="add-info-card">
-          <div className="add-field-row static">
-            <span>分类</span>
-            <strong>{categoryLabel(tx.category_name)}</strong>
-          </div>
-          <div className="add-field-row static">
-            <span>账户</span>
-            <strong>{tx.account_name}</strong>
-          </div>
-          <div className="add-field-row static">
-            <span>账本</span>
-            <strong>{tx.ledger_name}</strong>
-          </div>
-          <div className="add-field-row static">
-            <span>成员</span>
-            <strong>{tx.user_name}</strong>
-          </div>
-          <div className="add-field-row static">
-            <span>时间</span>
-            <strong>{formatCnDate(tx.occurred_at)}</strong>
-          </div>
-        </div>
-        {canEdit && (
-          <div className="add-page-foot">
-            <button type="button" className="btn ghost danger" onClick={() => onDelete(tx)}>
-              删除这笔账单
+      <div className="tx-detail-overlay" role="dialog" aria-modal="true" aria-label="账单详情">
+        <div className="add-page tx-detail-page">
+          <header className="add-page-head tx-detail-head">
+            <button type="button" className="add-back with-label" onClick={onClose}>
+              <Icon name="chevron-left" size={22} />
+              <span>返回</span>
             </button>
+            <div className="add-page-titles">
+              <div className="add-page-title-row">
+                <h2>账单详情</h2>
+                {canEdit && (
+                  <button type="button" className="text-link" onClick={() => setEditing(true)}>
+                    编辑
+                  </button>
+                )}
+              </div>
+              <p className="add-page-sub">
+                {tx.ledger_name} · {tx.source === "ai_wechat" ? "微信入账" : "手工记账"}
+              </p>
+            </div>
+          </header>
+          <div className="tx-detail-scroll">
+            <div className="tx-detail-hero">
+              <span className="tx-detail-icon">
+                <CategoryIcon name={tx.category_name} emoji={tx.category_icon} size={28} />
+              </span>
+              <p className="tx-detail-note">{tx.note || categoryLabel(tx.category_name)}</p>
+              <p className={`tx-detail-amt ${tx.type}`}>
+                {tx.type === "expense" ? "−" : "+"}¥{money(tx.amount)}
+              </p>
+            </div>
+            <div className="add-info-card">
+              <div className="add-field-row static">
+                <span>分类</span>
+                <strong>{categoryLabel(tx.category_name)}</strong>
+              </div>
+              <div className="add-field-row static">
+                <span>账户</span>
+                <strong>{tx.account_name}</strong>
+              </div>
+              <div className="add-field-row static">
+                <span>账本</span>
+                <strong>{tx.ledger_name}</strong>
+              </div>
+              <div className="add-field-row static">
+                <span>成员</span>
+                <strong>{tx.user_name}</strong>
+              </div>
+              <div className="add-field-row static">
+                <span>时间</span>
+                <strong>{formatCnDate(tx.occurred_at)}</strong>
+              </div>
+            </div>
+            {canEdit && (
+              <div className="add-page-foot">
+                <button type="button" className="btn ghost danger" onClick={() => onDelete(tx)}>
+                  删除这笔账单
+                </button>
+              </div>
+            )}
           </div>
-        )}
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="add-page tx-detail-page">
-      <header className="add-page-head">
-        <button type="button" className="add-back" onClick={() => setEditing(false)} aria-label="返回">
+    <div className="tx-detail-overlay" role="dialog" aria-modal="true" aria-label="编辑账单">
+      <div className="add-page tx-detail-page">
+      <header className="add-page-head tx-detail-head">
+        <button type="button" className="add-back with-label" onClick={() => setEditing(false)}>
           <Icon name="chevron-left" size={22} />
+          <span>返回</span>
         </button>
-        <div>
+        <div className="add-page-titles">
           <h2>编辑账单</h2>
           <p className="add-page-sub">{tx.user_name} 记的</p>
         </div>
       </header>
-      <form className="add-page-body" onSubmit={save}>
+      <form className="add-page-body tx-detail-scroll" onSubmit={save}>
         <Segmented
           value={form.type}
           options={[
@@ -2645,6 +3003,7 @@ function TxEditModal({ tx, token, me, ledgers, accounts, cats, onClose, onSaved,
           </button>
         </div>
       </form>
+      </div>
     </div>
   );
 }
@@ -2662,7 +3021,7 @@ function TransactionList({ token, me, show, query, emptyText = "还没有流水�
     .join("&");
 
   function loadRows() {
-    const path = `/api/v1/transactions?limit=80${qs ? `&${qs}` : ""}`;
+    const path = `/api/v1/transactions?limit=300${qs ? `&${qs}` : ""}`;
     return api(path, { token }).then(setRows);
   }
 
@@ -2725,7 +3084,7 @@ function TransactionList({ token, me, show, query, emptyText = "还没有流水�
   );
 }
 
-function Books({ token, me, show }) {
+function Books({ token, me, show, go }) {
   const [ledgers, setLedgers] = useState([]);
   const [active, setActive] = useState(null);
   useEffect(() => {
@@ -2737,12 +3096,11 @@ function Books({ token, me, show }) {
   const current = ledgers.find((l) => l.id === active);
   return (
     <div className="books-page">
-      <div className="page-head">
-        <div>
-          <h2 className="hello">账本流水</h2>
-          <p className="sub">点账本切换；点流水可编辑或删除。</p>
-        </div>
-      </div>
+      <SubPageHead
+        title="账本流水"
+        sub="点账本切换；点流水可编辑或删除。"
+        onBack={() => go("me")}
+      />
       <FilterBar label="账本">
         {ledgers.map((l) => (
           <FilterChip
@@ -3203,7 +3561,7 @@ function AddSheet({ token, me, show, onClose, onGoBills }) {
   );
 }
 
-function Biz({ token, me, show }) {
+function Biz({ token, me, show, go }) {
   const [dash, setDash] = useState(null);
   useEffect(() => {
     api("/api/v1/dashboard", { token }).then(setDash);
@@ -3211,8 +3569,11 @@ function Biz({ token, me, show }) {
   if (!dash) return null;
   return (
     <>
-      <h2 className="hello">经营账本 · 副业小摊</h2>
-      <p className="sub">进账、进货、订阅费单独统计，不计入家庭生活总额。点击流水可编辑或删除。</p>
+      <SubPageHead
+        title="经营账本"
+        sub="进账、进货、订阅费单独统计，不计入家庭生活总额。点击流水可编辑或删除。"
+        onBack={() => go("home")}
+      />
       <div className="row three" style={{ marginTop: 16 }}>
         <div className="card sage">
           <div className="label">经营收入</div>
@@ -3240,7 +3601,7 @@ function Biz({ token, me, show }) {
   );
 }
 
-function Budget({ token, show }) {
+function Budget({ token, show, go }) {
   const now = new Date();
   const [amount, setAmount] = useState("8000");
   const [dash, setDash] = useState(null);
@@ -3259,7 +3620,7 @@ function Budget({ token, show }) {
   }
   return (
     <>
-      <h2 className="hello">给这个月画一条温柔的线</h2>
+      <SubPageHead title="预算提醒" sub="给这个月画一条温柔的线" onBack={() => go("me")} />
       <form className="card" onSubmit={save} style={{ marginTop: 16, maxWidth: 420 }}>
         <label>
           家庭总支出预算（元）
@@ -3296,7 +3657,7 @@ const LEDGER_TYPES = [
 ];
 const LEDGER_ICONS = LEDGER_ICON_KEYS;
 
-function SettingsPanel({ token, me, show, onMeUpdate, initialTab = "profile" }) {
+function SettingsPanel({ token, me, show, go, onMeUpdate, initialTab = "profile" }) {
   const [tab, setTab] = useState(initialTab);
   const [profile, setProfile] = useState({
     username: "",
@@ -3597,12 +3958,7 @@ function SettingsPanel({ token, me, show, onMeUpdate, initialTab = "profile" }) 
 
   return (
     <div className="accounts-page">
-      <div className="page-head">
-        <div>
-          <h2 className="hello">设置</h2>
-          <p className="sub">资料、账本、家人与资金账户。</p>
-        </div>
-      </div>
+      <SubPageHead title="设置" sub="资料、账本、家人与资金账户。" onBack={() => go("me")} />
       <div className="settings-tabs-wrap">
         <Segmented
           value={tab}
@@ -4209,7 +4565,7 @@ async function downloadFile(path, token, filename) {
   URL.revokeObjectURL(url);
 }
 
-function BackupPanel({ token, me, show }) {
+function BackupPanel({ token, me, show, go }) {
   const [items, setItems] = useState([]);
   const [cfg, setCfg] = useState({
     enabled: false,
@@ -4232,8 +4588,7 @@ function BackupPanel({ token, me, show }) {
   if (me?.user.role !== "owner") {
     return (
       <>
-        <h2 className="hello">数据备份</h2>
-        <p className="muted">仅家长可管理备份与恢复。</p>
+        <SubPageHead title="数据备份" sub="仅家长可管理备份与恢复。" onBack={() => go("me")} />
       </>
     );
   }
@@ -4297,8 +4652,11 @@ function BackupPanel({ token, me, show }) {
 
   return (
     <div className="accounts-page">
-      <h2 className="hello">数据备份</h2>
-      <p className="sub">备份保存在 NAS 数据卷 /data/backups，可下载到电脑或配合定时任务自动备份。</p>
+      <SubPageHead
+        title="数据备份"
+        sub="备份保存在 NAS 数据卷 /data/backups，可下载到电脑或配合定时任务自动备份。"
+        onBack={() => go("me")}
+      />
 
       <div className="card" style={{ marginTop: 16 }}>
         <h3>立即备份</h3>
@@ -4410,7 +4768,7 @@ function BackupPanel({ token, me, show }) {
   );
 }
 
-function AiPanel({ token, show, me }) {
+function AiPanel({ token, show, me, go }) {
   const [text, setText] = useState("中午吃饭花了35，记我账上");
   const [reply, setReply] = useState("");
   const [tokenInfo, setTokenInfo] = useState(null);
@@ -4436,8 +4794,11 @@ function AiPanel({ token, show, me }) {
   }
   return (
     <>
-      <h2 className="hello">微信语音，窝窝代记</h2>
-      <p className="sub">OpenClaw 转写后调用本接口。也可以在这里先用文字试一试。</p>
+      <SubPageHead
+        title="微信 / AI 同步"
+        sub="OpenClaw 转写后调用本接口。也可以在这里先用文字试一试。"
+        onBack={() => go("me")}
+      />
       <div className="card" style={{ marginTop: 16 }}>
         <textarea rows={3} value={text} onChange={(e) => setText(e.target.value)} />
         <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
